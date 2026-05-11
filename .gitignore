@@ -1,2 +1,15 @@
 # ycode local artifacts
 .agents/
+
+# build artifacts
+bin/
+frontend/dist/assets/
+frontend/dist/index.html
+frontend/node_modules/
+
+# runtime artifacts
+*.db
+*.db-wal
+*.db-shm
+omniscore.key
+

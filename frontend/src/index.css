@@ -1,0 +1,59 @@
+@import "katex/dist/katex.min.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* Bluebook-style yellow highlight */
+mark.os-hl {
+  background: #ffe066;
+  color: inherit;
+  padding: 0;
+  border-radius: 2px;
+}
+
+/* Disable text selection in the choices pane (Bluebook does this too) */
+.os-choices {
+  user-select: none;
+}
+
+/* Subtle ruled border between header / panes / footer */
+.os-rule {
+  border-color: #d2d2d7;
+}
+
+/* Question navigator tile */
+.os-tile {
+  width: 2.5rem;
+  height: 2.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d2d2d7;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  background: white;
+}
+.os-tile[data-state="answered"] {
+  background: #1d1d1f;
+  color: white;
+  border-color: #1d1d1f;
+}
+.os-tile[data-state="current"] {
+  outline: 2px solid #0071e3;
+  outline-offset: 2px;
+}
+.os-tile[data-state="marked"]::after {
+  content: "★";
+  position: absolute;
+  margin-top: -1.7rem;
+  margin-left: 1.6rem;
+  color: #d70015;
+}

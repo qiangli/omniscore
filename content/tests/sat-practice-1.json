@@ -1,0 +1,98 @@
+{
+  "slug": "sat-practice-1",
+  "title": "OmniScore SAT Practice Test 1 (Demo)",
+  "exam_type": "sat",
+  "modules": [
+    {
+      "id": "rw-1",
+      "section": "rw",
+      "title": "Reading and Writing — Module 1",
+      "time_limit_s": 1920,
+      "questions": [
+        {
+          "id": "rw-1-q1",
+          "passage_md": "In 1850, the American author Nathaniel Hawthorne published *The Scarlet Letter*, a novel that examines guilt and the rigid moral codes of seventeenth-century Puritan New England. Hawthorne, whose own ancestor had been a judge in the Salem witch trials, sought through this work both to expose the hypocrisy of unforgiving public judgment and, more subtly, to argue that genuine moral reflection takes place not in the town square but in the private conscience of the individual.",
+          "stem_md": "Which choice best states the central claim of the text?",
+          "choices": [
+            { "label": "A", "text_md": "*The Scarlet Letter* was Hawthorne's most commercially successful novel." },
+            { "label": "B", "text_md": "Hawthorne wrote *The Scarlet Letter* primarily as an indictment of the Salem witch trials." },
+            { "label": "C", "text_md": "Hawthorne used *The Scarlet Letter* to critique public moral judgment and emphasize the private conscience." },
+            { "label": "D", "text_md": "Hawthorne believed Puritan moral codes were a useful guide for modern readers." }
+          ],
+          "answer_label": "C",
+          "rationale_md": "The passage states that Hawthorne sought to expose hypocritical public judgment **and** argue that moral reflection occurs in the private conscience — exactly what (C) captures. (A) is unsupported, (B) overstates the witch-trial connection, and (D) misreads Hawthorne's stance."
+        },
+        {
+          "id": "rw-1-q2",
+          "passage_md": "Marine biologist Dr. Lin Wei argues that coral reef restoration projects that focus exclusively on transplanting fast-growing coral species ______ the long-term resilience of the reef ecosystem, because slower-growing species provide structural complexity that supports a wider range of marine life.",
+          "stem_md": "Which choice completes the text with the most logical and precise word?",
+          "choices": [
+            { "label": "A", "text_md": "ensure" },
+            { "label": "B", "text_md": "undermine" },
+            { "label": "C", "text_md": "duplicate" },
+            { "label": "D", "text_md": "celebrate" }
+          ],
+          "answer_label": "B",
+          "rationale_md": "The clause after the blank explains that slower-growing species are important — implying that excluding them is harmful. Only **undermine** fits the logic of the sentence."
+        },
+        {
+          "id": "rw-1-q3",
+          "passage_md": "The following sentence appears in a draft of an essay:\n\n> Although the smartphone has reshaped how teenagers maintain friendships, scholars disagree about whether the change ___ a net gain or a net loss for adolescent well-being.",
+          "stem_md": "Which choice completes the sentence so that it conforms to the conventions of Standard English?",
+          "choices": [
+            { "label": "A", "text_md": "represent" },
+            { "label": "B", "text_md": "are representing" },
+            { "label": "C", "text_md": "represents" },
+            { "label": "D", "text_md": "have represented" }
+          ],
+          "answer_label": "C",
+          "rationale_md": "The subject of the embedded clause is *the change* (singular), so the verb must be singular: **represents**."
+        }
+      ]
+    },
+    {
+      "id": "math-1",
+      "section": "math",
+      "title": "Math — Module 1",
+      "time_limit_s": 2100,
+      "questions": [
+        {
+          "id": "math-1-q1",
+          "stem_md": "If $3x + 7 = 19$, what is the value of $x$?",
+          "choices": [
+            { "label": "A", "text_md": "$2$" },
+            { "label": "B", "text_md": "$4$" },
+            { "label": "C", "text_md": "$6$" },
+            { "label": "D", "text_md": "$12$" }
+          ],
+          "answer_label": "B",
+          "rationale_md": "Subtract 7 from both sides: $3x = 12$. Divide by 3: $x = 4$."
+        },
+        {
+          "id": "math-1-q2",
+          "stem_md": "A right triangle has legs of length $5$ and $12$. What is the length of the hypotenuse?",
+          "choices": [
+            { "label": "A", "text_md": "$13$" },
+            { "label": "B", "text_md": "$15$" },
+            { "label": "C", "text_md": "$17$" },
+            { "label": "D", "text_md": "$\\sqrt{169 - 25}$" }
+          ],
+          "answer_label": "A",
+          "rationale_md": "By the Pythagorean theorem, $h = \\sqrt{5^2 + 12^2} = \\sqrt{25 + 144} = \\sqrt{169} = 13$."
+        },
+        {
+          "id": "math-1-q3",
+          "stem_md": "A line passes through the points $(2, 3)$ and $(6, 11)$. What is the slope of the line?",
+          "choices": [
+            { "label": "A", "text_md": "$1$" },
+            { "label": "B", "text_md": "$2$" },
+            { "label": "C", "text_md": "$\\tfrac{1}{2}$" },
+            { "label": "D", "text_md": "$4$" }
+          ],
+          "answer_label": "B",
+          "rationale_md": "Slope $= \\dfrac{11 - 3}{6 - 2} = \\dfrac{8}{4} = 2$."
+        }
+      ]
+    }
+  ]
+}
