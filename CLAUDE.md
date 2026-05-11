@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-OmniScore — a local-first practice-test app that mirrors the Digital SAT and AP digital exam UI. **Runtime is a single pure-Go binary** with the React/TS frontend baked in via `go:embed`. SQLite (pure-Go driver) for storage. Zero outbound network calls at test-time.
+OmniScore — a local-first practice-test app that mirrors the Digital SAT and AP digital exam UI. **Runtime is a single pure-Go binary** with the React/TS frontend baked in via `go:embed`. SQLite (pure-Go driver) for storage. Zero outbound network calls at test-time. Apache-2.0 licensed (see `LICENSE` + `NOTICE`).
 
 Source layout:
 
