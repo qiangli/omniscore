@@ -15,8 +15,6 @@ import (
 	"syscall"
 	"time"
 
-	qrterminal "github.com/mdp/qrterminal/v3"
-
 	"github.com/qiangli/omniscore/frontend"
 	"github.com/qiangli/omniscore/internal/content"
 	"github.com/qiangli/omniscore/internal/server"
@@ -24,7 +22,7 @@ import (
 )
 
 func main() {
-	bind := flag.String("bind", "0.0.0.0:8080", "host:port to bind the HTTP server")
+	bind := flag.String("bind", "0.0.0.0:28080", "host:port to bind the HTTP server")
 	dbPath := flag.String("db", "omniscore.db", "SQLite database path")
 	contentRoot := flag.String("content", "content", "directory containing tests/ and curves/ subdirectories")
 	keyPath := flag.String("key", "omniscore.key", "HMAC cookie signing key file (auto-created)")
@@ -82,28 +80,26 @@ func main() {
 func printJoinInfo(logger *slog.Logger, bind string) {
 	_, port, err := net.SplitHostPort(bind)
 	if err != nil {
-		port = "8080"
+		port = "28080"
 	}
 	ips := lanIPv4s()
 	if len(ips) == 0 {
 		ips = []string{"127.0.0.1"}
 	}
 	logger.Info("listening", "bind", bind)
-	for _, ip := range ips {
-		url := fmt.Sprintf("http://%s:%s", ip, port)
-		logger.Info("join URL", "url", url)
-	}
+
 	primary := fmt.Sprintf("http://%s:%s", ips[0], port)
-	fmt.Fprintln(os.Stdout, "")
-	fmt.Fprintln(os.Stdout, "Scan to join:")
-	qrterminal.GenerateWithConfig(primary, qrterminal.Config{
-		Level:     qrterminal.L,
-		Writer:    os.Stdout,
-		BlackChar: qrterminal.BLACK,
-		WhiteChar: qrterminal.WHITE,
-		QuietZone: 1,
-	})
-	fmt.Fprintln(os.Stdout, "")
+	fmt.Fprintln(os.Stdout)
+	fmt.Fprintln(os.Stdout, "  OmniScore is ready.")
+	fmt.Fprintln(os.Stdout)
+	fmt.Fprintf(os.Stdout, "  Landing page: %s\n", primary)
+	if len(ips) > 1 {
+		fmt.Fprintln(os.Stdout, "  Other addresses:")
+		for _, ip := range ips[1:] {
+			fmt.Fprintf(os.Stdout, "    http://%s:%s\n", ip, port)
+		}
+	}
+	fmt.Fprintln(os.Stdout)
 }
 
 func lanIPv4s() []string {
