@@ -212,6 +212,8 @@ type Result struct {
 type Summary struct {
 	SessionID       string         `json:"session_id"`
 	TestSlug        string         `json:"test_slug"`
+	ExamType        string         `json:"exam_type,omitempty"`
+	Subject         string         `json:"subject,omitempty"`
 	State           State          `json:"state"`
 	RawTotal        int            `json:"raw_total"`
 	ScaledTotal     int            `json:"scaled_total"`
@@ -242,6 +244,8 @@ func Submit(ctx context.Context, s *store.Store, sessionID string) (Summary, err
 	sum := Summary{
 		SessionID:       sessionID,
 		TestSlug:        sess.TestSlug,
+		ExamType:        t.ExamType,
+		Subject:         t.Subject,
 		BySection:       map[string]int{},
 		BySectionScaled: map[string]int{},
 	}

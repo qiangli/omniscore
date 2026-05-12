@@ -92,7 +92,11 @@ export function Exam() {
       <PanelGroup direction="horizontal" className="flex-1">
         <Panel defaultSize={55} minSize={30} className="bg-white">
           <div className="h-full overflow-y-auto p-8">
-            <Passage questionId={q.id} passageMd={q.passage_md} />
+            <Passage
+              questionId={q.id}
+              passageMd={q.passage_md}
+              passageFigure={q.passage_figure}
+            />
           </div>
         </Panel>
         <PanelResizeHandle className="w-px bg-ruled hover:bg-blue-400 transition" />

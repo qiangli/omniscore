@@ -7,7 +7,8 @@ import {
 } from "../lib/anchors";
 import { useExam } from "../store/exam";
 import { api } from "../lib/api";
-import type { HighlightAnchor } from "../lib/types";
+import { FigureView } from "./Figure";
+import type { Figure, HighlightAnchor } from "../lib/types";
 
 // Passage is memoized on (question_id, passage_version) so React never
 // re-renders its inner DOM mid-question — which would break highlight anchors.
@@ -15,9 +16,11 @@ import type { HighlightAnchor } from "../lib/types";
 export function Passage({
   questionId,
   passageMd,
+  passageFigure,
 }: {
   questionId: string;
   passageMd?: string;
+  passageFigure?: Figure;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const session = useExam((s) => s.session);
@@ -111,6 +114,13 @@ export function Passage({
   }, [session, questionId, myAnchors, pushHighlight, removeHighlight]);
 
   if (!passageMd) {
+    if (passageFigure) {
+      return (
+        <div className="prose max-w-none">
+          <FigureView fig={passageFigure} />
+        </div>
+      );
+    }
     return (
       <div className="prose max-w-none text-ink/60 italic">
         (No passage for this question)

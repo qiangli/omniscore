@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { MDInline } from "../lib/markdown";
 import { useExam } from "../store/exam";
+import { FigureView } from "./Figure";
 import type { Question as Q } from "../lib/types";
 
 export function Question({
@@ -13,12 +14,13 @@ export function Question({
   const answers = useExam((s) => s.answers);
   const chosen = answers[q.id] ?? "";
 
-  // Keyboard A/B/C/D selects choices when this pane is in focus.
+  // Keyboard A–E selects choices when this pane is in focus. AP MCQs use 5
+  // choices (A–E); SAT uses 4 (A–D). Same handler for both.
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
       if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
       const k = ev.key.toUpperCase();
-      if (!"ABCD".includes(k)) return;
+      if (!"ABCDE".includes(k)) return;
       const exists = q.choices.find((c) => c.label === k);
       if (exists) {
         ev.preventDefault();
@@ -33,6 +35,7 @@ export function Question({
     <div className="os-choices space-y-4 max-w-2xl">
       <div className="text-base leading-relaxed">
         <MDInline text={q.stem_md} />
+        {q.stem_figure && <FigureView fig={q.stem_figure} />}
       </div>
       <div className="space-y-2">
         {q.choices.map((c) => {
@@ -62,6 +65,7 @@ export function Question({
               </span>
               <span className="flex-1 text-base leading-relaxed">
                 <MDInline text={c.text_md} />
+                {c.figure && <FigureView fig={c.figure} />}
               </span>
             </button>
           );

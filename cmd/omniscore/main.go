@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -24,7 +23,7 @@ import (
 func main() {
 	bind := flag.String("bind", "0.0.0.0:28080", "host:port to bind the HTTP server")
 	dbPath := flag.String("db", "omniscore.db", "SQLite database path")
-	contentRoot := flag.String("content", "content", "directory containing tests/ and curves/ subdirectories")
+	contentRoot := flag.String("content", "content", "directory containing per-exam-type subdirs (sat/, ap/, ...) each with tests/ + curves/, OR a flat tests/+curves/ layout")
 	keyPath := flag.String("key", "omniscore.key", "HMAC cookie signing key file (auto-created)")
 	flag.Parse()
 
@@ -41,15 +40,13 @@ func main() {
 	defer s.Close()
 	logger.Info("store ready", "path", *dbPath)
 
-	testsDir := filepath.Join(*contentRoot, "tests")
-	curvesDir := filepath.Join(*contentRoot, "curves")
-	if err := content.LoadFromDisk(ctx, s, testsDir, curvesDir); err != nil {
+	if err := content.LoadFromDisk(ctx, s, *contentRoot); err != nil {
 		logger.Error("load content", "err", err)
 		os.Exit(1)
 	}
-	logger.Info("content loaded", "tests_dir", testsDir, "curves_dir", curvesDir)
+	logger.Info("content loaded", "root", *contentRoot)
 
-	srv, err := server.New(s, *keyPath, frontend.DistFS(), logger)
+	srv, err := server.New(s, *keyPath, frontend.DistFS(), *contentRoot, logger)
 	if err != nil {
 		logger.Error("init server", "err", err)
 		os.Exit(1)

@@ -13,3 +13,16 @@ frontend/node_modules/
 *.db-shm
 omniscore.key
 
+# Sibling content repo + raw PDF source dirs are kept out of the omniscore repo entirely.
+data/
+
+# Importer scratch dir (rasterized pages, LLM cache, review log).
+.import-cache/
+
+# Env files. Real secrets must never be committed; .env.example is the template.
+.env
+.env.local
+.env.*.local
+
+# Claude Code per-machine overrides (the shared settings.json IS committed).
+.claude/settings.local.json

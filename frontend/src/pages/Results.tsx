@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useRoute } from "wouter";
 import { api } from "../lib/api";
 import { MDInline } from "../lib/markdown";
+import { sectionLabel } from "../lib/sectionLabels";
 import type { Summary } from "../lib/types";
 
 export function Results() {
@@ -36,7 +37,7 @@ export function Results() {
           {Object.entries(summary.by_section_scaled).map(([sec, scaled]) => (
             <div key={sec} className="border os-rule rounded-lg p-3">
               <div className="text-xs uppercase tracking-wide text-ink/60">
-                {sec === "rw" ? "Reading & Writing" : sec === "math" ? "Math" : sec}
+                {sectionLabel(summary.exam_type, summary.subject, sec)}
               </div>
               <div className="text-2xl font-semibold tabular-nums">{scaled}</div>
               <div className="text-xs text-ink/60">
@@ -59,7 +60,7 @@ export function Results() {
           >
             <div className="flex justify-between items-baseline mb-1">
               <div className="font-medium">
-                #{i + 1} · {r.section.toUpperCase()} ·{" "}
+                #{i + 1} · {sectionLabel(summary.exam_type, summary.subject, r.section)} ·{" "}
                 {r.is_correct ? "Correct" : "Incorrect"}
               </div>
               <div className="text-xs text-ink/60 tabular-nums">

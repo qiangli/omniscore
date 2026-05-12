@@ -1,9 +1,21 @@
-export type Choice = { label: string; text_md: string };
+export type Figure = {
+  src: string;
+  alt?: string;
+  width_px?: number;
+};
+
+export type Choice = {
+  label: string;
+  text_md: string;
+  figure?: Figure;
+};
 
 export type Question = {
   id: string;
   passage_md?: string;
+  passage_figure?: Figure;
   stem_md: string;
+  stem_figure?: Figure;
   choices: Choice[];
 };
 
@@ -48,6 +60,7 @@ export type TestListing = {
   slug: string;
   title: string;
   exam_type: string;
+  subject?: string;
   modules: number;
 };
 
@@ -79,6 +92,8 @@ export type Result = {
 export type Summary = {
   session_id: string;
   test_slug: string;
+  exam_type?: string;
+  subject?: string;
   state: SessionState;
   raw_total: number;
   scaled_total: number;

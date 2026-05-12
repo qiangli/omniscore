@@ -52,6 +52,10 @@ backend:
 install: frontend ## Install the omniscore binary into $$GOBIN (or $$GOPATH/bin)
 	$(GO) install -tags $(BUILD_TAGS) -ldflags '$(LDFLAGS)' $(PKG)
 
+ap-import: ## Build the AP PDF→JSON importer (separate binary; needs pdftoppm + Ollama at run time)
+	mkdir -p bin
+	$(GO) build -o bin/ap-import ./cmd/ap-import
+
 dev: frontend backend ## Build then run the server locally
 	./$(BIN)
 

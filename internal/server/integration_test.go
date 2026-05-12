@@ -78,12 +78,12 @@ func TestFullSessionFlow(t *testing.T) {
 	if err := writeJSON(filepath.Join(curvesDir, fixtureSlug+".json"), curve); err != nil {
 		t.Fatal(err)
 	}
-	if err := content.LoadFromDisk(ctx, s, testsDir, curvesDir); err != nil {
+	if err := content.LoadFromDisk(ctx, s, dir); err != nil {
 		t.Fatalf("load content: %v", err)
 	}
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	srv, err := server.New(s, keyPath, nil, logger)
+	srv, err := server.New(s, keyPath, nil, dir, logger)
 	if err != nil {
 		t.Fatalf("server.New: %v", err)
 	}
@@ -195,6 +195,185 @@ func writeJSON(path string, v any) error {
 		return err
 	}
 	return os.WriteFile(path, b, 0o644)
+}
+
+// TestFullSessionFlow_AP mirrors TestFullSessionFlow but exercises the AP path:
+// per-exam-type subdir layout, exam_type="ap", a 5-choice MCQ, embedded stem
+// figure, and AP section codes (mcq_no_calc / mcq_calc). It is the contract
+// the Phase 4 PDF importer's output must satisfy.
+func TestFullSessionFlow_AP(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+	keyPath := filepath.Join(dir, "test.key")
+
+	s, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+
+	// Per-exam-type layout under <dir>/ap/{tests,curves,figures}/.
+	apTests := filepath.Join(dir, "ap", "tests")
+	apCurves := filepath.Join(dir, "ap", "curves")
+	apFigures := filepath.Join(dir, "ap", "figures", "ap-fixture")
+	for _, p := range []string{apTests, apCurves, apFigures} {
+		if err := os.MkdirAll(p, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Plant a tiny PNG so figure HTTP test can be added later if desired.
+	if err := os.WriteFile(filepath.Join(apFigures, "q3.png"), []byte("\x89PNG\r\n\x1a\nfake"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	const fixtureSlug = "ap-fixture"
+	fixture := content.Test{
+		Slug: fixtureSlug, Title: "AP Fixture", ExamType: "ap", Subject: "calc_bc",
+		Modules: []content.Module{
+			{
+				ID: "mcq-no-calc", Section: "mcq_no_calc", Title: "Section I, Part A — No calculator", TimeLimitS: 600,
+				Questions: []content.Question{
+					{ID: "q1", StemMD: "$f'(2)$ if $f(x)=x^3-3x$?",
+						Choices: []content.Choice{
+							{Label: "A", TextMD: "$3$"}, {Label: "B", TextMD: "$6$"}, {Label: "C", TextMD: "$9$"},
+							{Label: "D", TextMD: "$12$"}, {Label: "E", TextMD: "$15$"},
+						},
+						AnswerLabel: "C", RationaleMD: "$3x^2-3$ at $x=2$ is $9$."},
+					{ID: "q2", StemMD: "$\\lim_{x\\to0}\\sin(3x)/x$",
+						Choices: []content.Choice{
+							{Label: "A", TextMD: "$0$"}, {Label: "B", TextMD: "$1$"}, {Label: "C", TextMD: "$3$"},
+							{Label: "D", TextMD: "$\\infty$"}, {Label: "E", TextMD: "DNE"},
+						},
+						AnswerLabel: "C"},
+				},
+			},
+			{
+				ID: "mcq-calc", Section: "mcq_calc", Title: "Section I, Part B — Calculator", TimeLimitS: 600,
+				Questions: []content.Question{
+					{ID: "q3", StemMD: "Slope field shown is for which DE?",
+						StemFigure: &content.Figure{Src: "figures/q3.png", Alt: "slope field", WidthPx: 360},
+						Choices: []content.Choice{
+							{Label: "A", TextMD: "$dy/dx=x$"}, {Label: "B", TextMD: "$dy/dx=y$"},
+							{Label: "C", TextMD: "$dy/dx=xy$"}, {Label: "D", TextMD: "$dy/dx=x+y$"},
+							{Label: "E", TextMD: "$dy/dx=x-y$"},
+						},
+						AnswerLabel: "B"},
+				},
+			},
+		},
+	}
+	if err := writeJSON(filepath.Join(apTests, fixtureSlug+".json"), fixture); err != nil {
+		t.Fatal(err)
+	}
+	curve := content.Curve{
+		TestSlug: fixtureSlug,
+		Sections: map[string][]content.CurvePoint{
+			"mcq_no_calc": {{Raw: 0, Scaled: 1}, {Raw: 1, Scaled: 3}, {Raw: 2, Scaled: 5}},
+			"mcq_calc":    {{Raw: 0, Scaled: 1}, {Raw: 1, Scaled: 5}},
+		},
+	}
+	if err := writeJSON(filepath.Join(apCurves, fixtureSlug+".json"), curve); err != nil {
+		t.Fatal(err)
+	}
+	if err := content.LoadFromDisk(ctx, s, dir); err != nil {
+		t.Fatalf("load content: %v", err)
+	}
+
+	// Confirm figure src was rewritten to the absolute /api/figures/ URL.
+	loaded, err := content.Get(ctx, s, fixtureSlug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := loaded.Modules[1].Questions[0].StemFigure
+	want := "/api/figures/ap/ap-fixture/q3.png"
+	if got == nil || got.Src != want {
+		t.Fatalf("figure src rewrite: want %q, got %+v", want, got)
+	}
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	srv, err := server.New(s, keyPath, nil, dir, logger)
+	if err != nil {
+		t.Fatalf("server.New: %v", err)
+	}
+	ts := httptest.NewServer(srv.Router())
+	t.Cleanup(ts.Close)
+	c := newClient(ts)
+
+	// Join, create session.
+	var join struct {
+		ID int64 `json:"id"`
+	}
+	c.do(t, "POST", "/api/students", map[string]string{"display_name": "AP Tester"}, &join)
+	var env struct {
+		Session session.Session `json:"session"`
+		Module  content.Module  `json:"module"`
+		Test    content.Listing `json:"test"`
+	}
+	c.do(t, "POST", "/api/sessions", map[string]string{"test_slug": fixtureSlug}, &env)
+	if env.Test.Subject != "calc_bc" || env.Test.ExamType != "ap" {
+		t.Fatalf("session test envelope missing AP metadata: %+v", env.Test)
+	}
+	if len(env.Module.Questions) != 2 || len(env.Module.Questions[0].Choices) != 5 {
+		t.Fatalf("module 1 should have 2 questions × 5 choices, got %d × %d",
+			len(env.Module.Questions), len(env.Module.Questions[0].Choices))
+	}
+
+	// Answer module 1: q1=C (correct), q2=E (wrong).
+	for _, ans := range []struct{ Q, C string }{{"q1", "C"}, {"q2", "E"}} {
+		var r map[string]any
+		c.do(t, "PATCH", "/api/sessions/"+env.Session.ID+"/answer",
+			map[string]any{"question_id": ans.Q, "choice": ans.C, "time_on_question_ms": 1000}, &r)
+	}
+
+	// Advance to mcq-calc module.
+	var nextEnv struct {
+		Module content.Module `json:"module"`
+	}
+	c.do(t, "POST", "/api/sessions/"+env.Session.ID+"/advance", nil, &nextEnv)
+	if nextEnv.Module.Section != "mcq_calc" {
+		t.Fatalf("advance: want mcq_calc, got %q", nextEnv.Module.Section)
+	}
+	// Confirm the figure metadata flows out via the live envelope (with answers stripped).
+	if nextEnv.Module.Questions[0].StemFigure == nil ||
+		nextEnv.Module.Questions[0].StemFigure.Src != "/api/figures/ap/ap-fixture/q3.png" {
+		t.Errorf("module 2 figure missing/unrewritten: %+v", nextEnv.Module.Questions[0].StemFigure)
+	}
+	if nextEnv.Module.Questions[0].AnswerLabel != "" {
+		t.Errorf("answer should be stripped in live envelope, got %q", nextEnv.Module.Questions[0].AnswerLabel)
+	}
+
+	// Answer q3=B (correct).
+	var r map[string]any
+	c.do(t, "PATCH", "/api/sessions/"+env.Session.ID+"/answer",
+		map[string]any{"question_id": "q3", "choice": "B", "time_on_question_ms": 2000}, &r)
+
+	// Advance past last module.
+	var done map[string]any
+	c.do(t, "POST", "/api/sessions/"+env.Session.ID+"/advance", nil, &done)
+	if v, _ := done["done"].(bool); !v {
+		t.Fatalf("expected done:true, got %v", done)
+	}
+
+	// Submit: q1 correct + q3 correct = 1 in each section.
+	var sum session.Summary
+	c.do(t, "POST", "/api/sessions/"+env.Session.ID+"/submit", nil, &sum)
+	if sum.ExamType != "ap" || sum.Subject != "calc_bc" {
+		t.Errorf("Summary missing AP metadata: %+v", sum)
+	}
+	if sum.RawTotal != 2 {
+		t.Errorf("raw total: want 2, got %d", sum.RawTotal)
+	}
+	// Per-section: mcq_no_calc raw=1 → 3, mcq_calc raw=1 → 5, total 8.
+	if sum.ScaledTotal != 8 {
+		t.Errorf("scaled total: want 8, got %d", sum.ScaledTotal)
+	}
+	if sum.BySection["mcq_no_calc"] != 1 || sum.BySection["mcq_calc"] != 1 {
+		t.Errorf("by-section raw: %+v", sum.BySection)
+	}
+	if sum.BySectionScaled["mcq_no_calc"] != 3 || sum.BySectionScaled["mcq_calc"] != 5 {
+		t.Errorf("by-section scaled: %+v", sum.BySectionScaled)
+	}
 }
 
 type client struct {

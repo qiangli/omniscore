@@ -22,19 +22,22 @@ import (
 
 // Server holds wiring for the HTTP handlers.
 type Server struct {
-	Store   *store.Store
-	Cookies *cookieSigner
-	Static  fs.FS // embedded frontend; may be nil during early bootstrap
-	Logger  *slog.Logger
+	Store       *store.Store
+	Cookies     *cookieSigner
+	Static      fs.FS // embedded frontend; may be nil during early bootstrap
+	FiguresRoot string // contentRoot — base for per-exam <exam>/figures/ trees
+	Logger      *slog.Logger
 }
 
-// New builds a Server with a HMAC cookie key persisted at keyPath.
-func New(s *store.Store, keyPath string, static fs.FS, logger *slog.Logger) (*Server, error) {
+// New builds a Server with a HMAC cookie key persisted at keyPath. figuresRoot
+// is the same path passed as -content; it lets the static handler at
+// /api/figures/<exam>/<slug>/<file> resolve images on disk.
+func New(s *store.Store, keyPath string, static fs.FS, figuresRoot string, logger *slog.Logger) (*Server, error) {
 	key, err := loadOrCreateKey(keyPath)
 	if err != nil {
 		return nil, err
 	}
-	return &Server{Store: s, Cookies: &cookieSigner{key: key}, Static: static, Logger: logger}, nil
+	return &Server{Store: s, Cookies: &cookieSigner{key: key}, Static: static, FiguresRoot: figuresRoot, Logger: logger}, nil
 }
 
 // Router returns the configured chi.Mux. Mount under "/" of an http.Server.
@@ -52,6 +55,9 @@ func (s *Server) Router() http.Handler {
 		r.Post("/students", s.postStudent)
 		r.Get("/tests", s.getTests)
 		r.Get("/tests/{slug}", s.getTest)
+		if s.FiguresRoot != "" {
+			r.Get("/figures/{exam}/{slug}/*", s.serveFigure)
+		}
 
 		r.Group(func(r chi.Router) {
 			r.Use(s.requireStudent)
@@ -194,7 +200,7 @@ func (s *Server) postSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, sessionEnvelope{
 		Session:     sess,
 		Module:      mod,
-		Test:        content.Listing{Slug: t.Slug, Title: t.Title, ExamType: t.ExamType, Modules: len(t.Modules)},
+		Test:        content.Listing{Slug: t.Slug, Title: t.Title, ExamType: t.ExamType, Subject: t.Subject, Modules: len(t.Modules)},
 		Responses:   nil,
 		Highlights:  nil,
 		ServerNowMS: time.Now().UnixMilli(),
@@ -225,7 +231,7 @@ func (s *Server) getSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, sessionEnvelope{
 		Session:     sess,
 		Module:      mod,
-		Test:        content.Listing{Slug: t.Slug, Title: t.Title, ExamType: t.ExamType, Modules: len(t.Modules)},
+		Test:        content.Listing{Slug: t.Slug, Title: t.Title, ExamType: t.ExamType, Subject: t.Subject, Modules: len(t.Modules)},
 		Responses:   resps,
 		Highlights:  hs,
 		ServerNowMS: time.Now().UnixMilli(),
@@ -288,7 +294,7 @@ func (s *Server) postAdvance(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, sessionEnvelope{
 		Session:     next,
 		Module:      mod,
-		Test:        content.Listing{Slug: t.Slug, Title: t.Title, ExamType: t.ExamType, Modules: len(t.Modules)},
+		Test:        content.Listing{Slug: t.Slug, Title: t.Title, ExamType: t.ExamType, Subject: t.Subject, Modules: len(t.Modules)},
 		ServerNowMS: time.Now().UnixMilli(),
 	})
 }

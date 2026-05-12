@@ -5,33 +5,46 @@ package content
 type Test struct {
 	Slug     string   `json:"slug"`
 	Title    string   `json:"title"`
-	ExamType string   `json:"exam_type"` // "sat" | "ap"
+	ExamType string   `json:"exam_type"`         // "sat" | "ap"
+	Subject  string   `json:"subject,omitempty"` // e.g. "calc_bc" — AP subject code
 	Modules  []Module `json:"modules"`
 }
 
 // Module is one timed section of a Test.
 type Module struct {
 	ID         string     `json:"id"`
-	Section    string     `json:"section"` // "rw" | "math"
+	Section    string     `json:"section"` // "rw" | "math" | "mcq_no_calc" | ...
 	Title      string     `json:"title"`
 	TimeLimitS int        `json:"time_limit_s"`
 	Questions  []Question `json:"questions"`
 }
 
-// Question is one stem with optional passage and 2-4 lettered choices.
+// Question is one stem (with optional passage and figures) and a set of lettered choices.
 type Question struct {
-	ID          string   `json:"id"`
-	PassageMD   string   `json:"passage_md,omitempty"`
-	StemMD      string   `json:"stem_md"`
-	Choices     []Choice `json:"choices"`
-	AnswerLabel string   `json:"answer_label,omitempty"`
-	RationaleMD string   `json:"rationale_md,omitempty"`
+	ID            string   `json:"id"`
+	PassageMD     string   `json:"passage_md,omitempty"`
+	PassageFigure *Figure  `json:"passage_figure,omitempty"`
+	StemMD        string   `json:"stem_md"`
+	StemFigure    *Figure  `json:"stem_figure,omitempty"`
+	Choices       []Choice `json:"choices"`
+	AnswerLabel   string   `json:"answer_label,omitempty"`
+	RationaleMD   string   `json:"rationale_md,omitempty"`
 }
 
-// Choice is one lettered answer option.
+// Choice is one lettered answer option, optionally accompanied by a figure.
 type Choice struct {
-	Label  string `json:"label"`
-	TextMD string `json:"text_md"`
+	Label  string  `json:"label"`
+	TextMD string  `json:"text_md"`
+	Figure *Figure `json:"figure,omitempty"`
+}
+
+// Figure is an inline image asset. Src is rewritten by the loader to an
+// absolute /api/figures/<exam>/<slug>/<file> URL before the JSON blob is
+// persisted, so the frontend renders <img src=...> verbatim.
+type Figure struct {
+	Src     string `json:"src"`
+	Alt     string `json:"alt,omitempty"`
+	WidthPx int    `json:"width_px,omitempty"`
 }
 
 // Curve is the on-disk raw->scaled score lookup for a Test.
