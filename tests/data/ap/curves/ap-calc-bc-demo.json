@@ -1,0 +1,14 @@
+{
+  "test_slug": "ap-calc-bc-demo",
+  "sections": {
+    "mcq_no_calc": [
+      { "raw": 0, "scaled": 1 },
+      { "raw": 1, "scaled": 3 },
+      { "raw": 2, "scaled": 5 }
+    ],
+    "mcq_calc": [
+      { "raw": 0, "scaled": 1 },
+      { "raw": 1, "scaled": 5 }
+    ]
+  }
+}

@@ -17,8 +17,9 @@ Source layout:
 - `internal/server/` — chi routes, signed cookie auth, embedded-FS SPA handler. `Server.New(...)` takes a `figuresRoot` arg (same path as `-content`); `/api/figures/{exam}/{slug}/*` is served by `internal/server/figures.go` with a path-traversal guard. End-to-end tests are `TestFullSessionFlow` (SAT, flat layout) and `TestFullSessionFlow_AP` (AP, per-exam-type subdir, 5-choice MCQs, embedded figures) in `internal/server/integration_test.go`.
 - `internal/importer/` — AP PDF→JSON pipeline driven by `cmd/ap-import`: `vision/` (Provider interface + `ollama` / `anthropic` / `openai` / `gemini` impls; the factory parser `llm.go` lives in the parent `importer` package to avoid an import cycle), `render/` (Poppler wrapper), and stages `classify.go` / `extract.go` / `answers.go` / `curve.go` / `validate.go` / `emit.go`. Output schema matches `internal/content` types directly (no schema drift). Provider is selected via `vendor/model` spec — see CLI section.
 - `frontend/` — Vite + React 18 + TS + Tailwind app; `frontend/embed.go` exposes `frontend/dist/` as an `embed.FS`. The cookie-auth swap point is `internal/server/cookies.go`. AP MCQs use 5 choices A–E; keyboard handler in `Question.tsx` accepts the full A–E range. `Figure.tsx` renders inline `<img>`; `Passage.tsx` falls back to `passage_figure` when there's no markdown text. Section labels go through `lib/sectionLabels.ts`, keyed by `(exam_type[:subject], section)`.
-- `content/tests/<slug>.json` — legacy SAT layout (still supported). New content lives in a separate, optional repo at `data/omni-data/{sat,ap}/{tests,curves,figures}/` symlinked into the tree; point `-content data/omni-data` and both load.
-- `content/curves/<slug>.json` — raw → scaled lookup table per test.
+- `content/tests/<slug>.json` + `content/curves/<slug>.json` — legacy flat-layout SAT demo that ships in the repo (still supported by the loader).
+- `tests/data/<exam>/{tests,curves,figures}/<slug>.*` — committed *test/dev* fixtures used for end-to-end smoke testing (`./bin/omniscore -content tests/data`). The hand-authored `ap-calc-bc-demo` lives here. Not real content; safe to publish.
+- `data/omni-data/{sat,ap}/{tests,curves,figures}/` — *private* sibling git repo, gitignored from this tree, populated by `cmd/ap-import` runs against copyrighted PDFs. Boot the binary with `-content data/omni-data` once you have real content there.
 - `docs/backlog/<slug>.md` — Boss → Foreman → Worker task queue (see `docs/backlog.md`).
 
 ## Build / lint / test
@@ -46,7 +47,8 @@ go test ./internal/importer/... -v                             # importer unit +
 go vet ./...
 ( cd frontend && npm install && npm run build )                # only the frontend
 ( cd frontend && npm run lint )                                # frontend typecheck only (tsc --noEmit)
-./bin/omniscore -bind 127.0.0.1:28080 -content data/omni-data  # run locally with multi-exam content
+./bin/omniscore -bind 127.0.0.1:28080 -content tests/data      # boot against the AP demo fixture
+./bin/omniscore -bind 127.0.0.1:28080 -content data/omni-data  # boot against private real content
 ./bin/ap-import -validate-only data/omni-data/ap/tests/<slug>.json    # validate a (hand-edited) test
 ./bin/ap-import -pdf <pdf> -slug <slug> -title <title> -out data/omni-data/ap -workdir .import-cache/<slug>
 ```

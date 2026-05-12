@@ -1,0 +1,68 @@
+{
+  "slug": "ap-calc-bc-demo",
+  "title": "AP Calculus BC — Demo (3 questions)",
+  "exam_type": "ap",
+  "subject": "calc_bc",
+  "modules": [
+    {
+      "id": "mcq-no-calc",
+      "section": "mcq_no_calc",
+      "title": "Section I, Part A — No calculator",
+      "time_limit_s": 360,
+      "questions": [
+        {
+          "id": "q1",
+          "stem_md": "If $f(x) = x^3 - 3x$, what is $f'(2)$?",
+          "choices": [
+            { "label": "A", "text_md": "$3$" },
+            { "label": "B", "text_md": "$6$" },
+            { "label": "C", "text_md": "$9$" },
+            { "label": "D", "text_md": "$12$" },
+            { "label": "E", "text_md": "$15$" }
+          ],
+          "answer_label": "C",
+          "rationale_md": "$f'(x)=3x^2-3$, so $f'(2)=12-3=9$."
+        },
+        {
+          "id": "q2",
+          "stem_md": "Evaluate $\\lim_{x\\to 0}\\dfrac{\\sin(3x)}{x}$.",
+          "choices": [
+            { "label": "A", "text_md": "$0$" },
+            { "label": "B", "text_md": "$1$" },
+            { "label": "C", "text_md": "$3$" },
+            { "label": "D", "text_md": "$\\infty$" },
+            { "label": "E", "text_md": "Does not exist" }
+          ],
+          "answer_label": "C",
+          "rationale_md": "$3 \\cdot \\lim_{x\\to 0} \\dfrac{\\sin(3x)}{3x} = 3 \\cdot 1 = 3$."
+        }
+      ]
+    },
+    {
+      "id": "mcq-calc",
+      "section": "mcq_calc",
+      "title": "Section I, Part B — Calculator allowed",
+      "time_limit_s": 360,
+      "questions": [
+        {
+          "id": "q3",
+          "stem_md": "The slope field shown is for which differential equation?",
+          "stem_figure": {
+            "src": "figures/q3-slope-field.png",
+            "alt": "Slope field with horizontal slopes on the x-axis",
+            "width_px": 360
+          },
+          "choices": [
+            { "label": "A", "text_md": "$\\dfrac{dy}{dx} = x$" },
+            { "label": "B", "text_md": "$\\dfrac{dy}{dx} = y$" },
+            { "label": "C", "text_md": "$\\dfrac{dy}{dx} = xy$" },
+            { "label": "D", "text_md": "$\\dfrac{dy}{dx} = x + y$" },
+            { "label": "E", "text_md": "$\\dfrac{dy}{dx} = x - y$" }
+          ],
+          "answer_label": "B",
+          "rationale_md": "Slopes are zero exactly when $y=0$ (ruling out A, D, E) and do not depend on $x$ at fixed $y$ (ruling out C). Therefore $\\frac{dy}{dx}=y$."
+        }
+      ]
+    }
+  ]
+}
