@@ -25,5 +25,5 @@ omniscore.key
 .env.local
 .env.*.local
 
-# Claude Code per-machine overrides (the shared settings.json IS committed).
-.claude/settings.local.json
+# Claude Code config kept private to each machine (not committed to this repo).
+.claude/
