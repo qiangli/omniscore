@@ -20,6 +20,9 @@ omniscore.key
 # Importer scratch dir (rasterized pages, LLM cache, review log).
 .import-cache/
 
+# `make start` background-server tracking (pid file + stdout log).
+.run/
+
 # Env files. Real secrets must never be committed; .env.example is the template.
 .env
 .env.local
