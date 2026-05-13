@@ -9,7 +9,7 @@ PKG ?= ./cmd/omniscore
 LDFLAGS ?= -s -w
 BUILD_TAGS ?= netgo,osusergo
 
-.PHONY: help all tidy fmt vet build frontend backend test go-test fe-lint install clean dev release
+.PHONY: help all tidy fmt vet build frontend backend test go-test fe-lint install clean dev release ap-import sat-import
 
 .DEFAULT_GOAL := help
 
@@ -52,9 +52,13 @@ backend:
 install: frontend ## Install the omniscore binary into $$GOBIN (or $$GOPATH/bin)
 	$(GO) install -tags $(BUILD_TAGS) -ldflags '$(LDFLAGS)' $(PKG)
 
-ap-import: ## Build the AP PDF→JSON importer (separate binary; needs pdftoppm + Ollama at run time)
+ap-import: ## Build the AP PDF→JSON importer (separate binary; needs pdftoppm + a vision LLM at run time)
 	mkdir -p bin
 	$(GO) build -o bin/ap-import ./cmd/ap-import
+
+sat-import: ## Build the SAT PDF→JSON importer (separate binary; needs pdftoppm + a vision LLM at run time)
+	mkdir -p bin
+	$(GO) build -o bin/sat-import ./cmd/sat-import
 
 dev: frontend backend ## Build then run the server locally
 	./$(BIN)
