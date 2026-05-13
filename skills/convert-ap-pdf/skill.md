@@ -58,6 +58,11 @@ make ap-import     # produces bin/ap-import (not shipped in releases)
 3. **Wait.** Same time profile as SAT: 5–15 min Ollama, 2–5 min cloud per
    PDF. LLM responses cached under `<workdir>/llm-cache/`.
 
+   **Import cache.** Once `data/omni-data/ap/<slug>/.import-manifest.json`
+   exists, a subsequent invocation with byte-identical inputs and matching
+   parameters returns instantly with no LLM traffic. Pass `-force` to
+   override.
+
 4. **Read the review log** at `.import-cache/<slug>/.review/<slug>.md` and
    hand-fix flagged questions in `data/omni-data/ap/<slug>/test.json`.
 
@@ -66,7 +71,10 @@ make ap-import     # produces bin/ap-import (not shipped in releases)
    data/omni-data/ap/ap-calc-bc-2014/
    ├── test.json
    ├── curve.json
-   └── figures/qNN-{stem,a,b,c,d,e}.png
+   ├── figures/qNN-{stem,a,b,c,d,e}.png
+   ├── raw/                          # source PDF copied verbatim for review
+   │   └── AP Calc BC 2014.pdf
+   └── .import-manifest.json         # input hashes + run parameters (cache key)
    ```
    AP MCQs have 5 choices A–E. Legacy 2014–2017 exams use 4 choices; the
    extraction prompt pads with empty E and the validator accepts both.

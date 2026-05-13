@@ -74,6 +74,14 @@ make sat-import     # produces bin/sat-import (not shipped in releases)
    per PDF. Each LLM response is cached under `<workdir>/llm-cache/` so
    re-runs cost zero LLM calls until you change DPI or prompt versions.
 
+   **Import cache.** Once a slug has emitted a `data/omni-data/sat/<slug>/
+   .import-manifest.json`, a subsequent invocation with byte-identical
+   inputs and matching DPI / consistency / `-model` returns instantly with
+   no LLM traffic and no PDF rasterization. Pass `-force` to override the
+   cache. The cache key is the SHA-256 of each input PDF plus the run
+   parameters; changing the model, DPI, or replacing a PDF naturally
+   invalidates it.
+
 4. **Read the review log.** Open `.import-cache/<slug>/.review/<slug>.md` —
    it lists every question flagged for human inspection (disagreement
    between self-consistency rounds, missing answer-key entry, unbalanced
@@ -83,14 +91,20 @@ make sat-import     # produces bin/sat-import (not shipped in releases)
 5. **Inspect the output.** The importer writes a self-contained subfolder:
    ```
    data/omni-data/sat/digital-sat-practice-1/
-   ├── test.json
-   ├── curve.json
-   └── figures/qNN-{stem,a,b,c,d}.png
+   ├── test.json                    # the questions
+   ├── curve.json                   # raw → scaled lookup (with [low, high] bands)
+   ├── figures/qNN-{stem,a,b,c,d}.png
+   ├── raw/                         # source PDFs copied verbatim for review
+   │   ├── Digital SAT Practice#1_Bluebook.pdf
+   │   └── Digital SAT Practice#1_Bluebook_Scoring.pdf
+   └── .import-manifest.json        # input hashes + run parameters (cache key)
    ```
    Confirm the `test.json` has four modules (`rw-1`, `rw-2`, `math-1`,
-   `math-2`), 4-choice MCQs labeled A–D, and `answer_label` set on every
-   question. Confirm `curve.json` has two sections (`rw`, `math`) with the
-   200–800 scale.
+   `math-2`). R&W modules contain 4-choice MCQs labeled A–D. Math modules
+   may mix MCQs and **SPR items** (`"type": "spr"`, `answer_values` like
+   `["2520"]`, `["0.5","1/2"]`, or `["2; -12"]`). Confirm `curve.json` has
+   two sections (`rw`, `math`) with `scaled_low`/`scaled_high` per raw
+   row covering the full 200–800 scale.
 
 6. **Re-validate after manual edits.**
    ```bash

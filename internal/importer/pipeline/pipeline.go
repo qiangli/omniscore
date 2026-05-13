@@ -2,8 +2,10 @@ package pipeline
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"sort"
 	"time"
@@ -33,6 +35,16 @@ type Input struct {
 	ConsistencyN int
 	DPIClassify  int
 	DPIExtract   int
+
+	// Fingerprint identifies the run environment for the on-disk import
+	// cache. Callers typically populate this with the vision-model spec
+	// ("anthropic/claude-sonnet-4-6"). When it changes, the cache misses
+	// and the pipeline re-runs even if the input PDFs are byte-identical.
+	Fingerprint string
+
+	// Force, when true, bypasses the on-disk cache check and always
+	// re-runs the full pipeline.
+	Force bool
 }
 
 // Result reports what Run produced.
@@ -47,11 +59,35 @@ type Result struct {
 // Run executes the full pipeline: rasterize → classify → extract MCQs →
 // reconcile answers → extract curve → validate → emit. Returns once Emit
 // has written the test JSON + curve + figures + review log.
+//
+// Run is idempotent: if a prior run produced .import-manifest.json under the
+// output slug folder and the inputs (PDF hashes) + parameters (DPI,
+// consistency, fingerprint) all match, Run returns the prior Result without
+// touching the LLM. Set Input.Force=true to bypass the cache.
 func Run(ctx context.Context, log *slog.Logger, in Input) (Result, error) {
 	start := time.Now()
 
 	if in.ConsistencyN < 1 {
 		in.ConsistencyN = 1
+	}
+
+	// Pre-flight: compute the manifest we'd write now, and compare against
+	// any prior manifest on disk. Cache hit means we skip every LLM call.
+	expected, err := computeManifest(in)
+	if err != nil {
+		return Result{}, fmt.Errorf("compute import manifest: %w", err)
+	}
+	manifestPath := ManifestPath(in.OutRoot, in.Profile.ExamType, in.Slug)
+	if !in.Force {
+		if prior, ok, perr := LoadManifest(manifestPath); perr == nil && ok && manifestMatches(prior, expected) {
+			cached, cerr := readCachedResult(in, expected, log)
+			if cerr == nil {
+				log.Info("import cache hit; skipping pipeline",
+					"slug", in.Slug, "manifest", manifestPath, "elapsed", time.Since(start).String())
+				return cached, nil
+			}
+			log.Warn("import cache hit but cached output unreadable; re-running", "err", cerr)
+		}
 	}
 
 	// 1. Rasterize every input PDF at low DPI for classification.
@@ -228,6 +264,27 @@ func Run(ctx context.Context, log *slog.Logger, in Input) (Result, error) {
 		res.Test.Modules = append(res.Test.Modules, mod)
 	}
 
+	// 9. Copy the source PDFs into <slug>/raw/ so teachers/admins can open
+	//    the per-test folder and verify the conversion against the originals.
+	rawPaths, err := CopyRawPDFs(in.OutRoot, in.Profile.ExamType, in.Slug, map[string]string{
+		"test":        in.PDFTest,
+		"scoring":     in.PDFScoring,
+		"explanation": in.PDFExplanation,
+	})
+	if err != nil {
+		log.Warn("copy raw pdfs failed", "err", err)
+	} else if len(rawPaths) > 0 {
+		log.Info("raw pdfs copied", "count", len(rawPaths), "dir", RawDir(in.OutRoot, in.Profile.ExamType, in.Slug))
+	}
+
+	// 10. Persist the manifest so the next run with identical inputs can
+	//     short-circuit. completed_at is stamped after every artifact has
+	//     landed on disk; a partial run leaves a stale manifest at most.
+	expected.CompletedAtMS = time.Now().UnixMilli()
+	if err := WriteManifest(manifestPath, expected); err != nil {
+		log.Warn("write import manifest", "err", err)
+	}
+
 	log.Info("emit done",
 		"written", written,
 		"flagged", flagged,
@@ -235,6 +292,58 @@ func Run(ctx context.Context, log *slog.Logger, in Input) (Result, error) {
 		"review", filepath.Join(in.Workdir, ".review", in.Slug+".md"),
 		"elapsed", res.Elapsed.String())
 	return res, nil
+}
+
+// readCachedResult reconstructs a Result struct from on-disk artifacts when
+// a cache hit short-circuits the pipeline. Returns an error if either
+// test.json or curve.json is missing/malformed.
+func readCachedResult(in Input, manifest ImportManifest, _ *slog.Logger) (Result, error) {
+	slugDir := filepath.Join(in.OutRoot, in.Profile.ExamType, in.Slug)
+	testPath := filepath.Join(slugDir, "test.json")
+	curvePath := filepath.Join(slugDir, "curve.json")
+	t, err := readTestJSON(testPath)
+	if err != nil {
+		return Result{}, fmt.Errorf("read cached test.json: %w", err)
+	}
+	c, err := readCurveJSON(curvePath)
+	if err != nil {
+		return Result{}, fmt.Errorf("read cached curve.json: %w", err)
+	}
+	written := 0
+	for _, m := range t.Modules {
+		written += len(m.Questions)
+	}
+	_ = manifest // reserved for future use (e.g. surfacing fingerprint in Result)
+	return Result{Test: t, Curve: c, Written: written}, nil
+}
+
+func readTestJSON(path string) (content.Test, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return content.Test{}, err
+	}
+	var t content.Test
+	if err := json.Unmarshal(raw, &t); err != nil {
+		return content.Test{}, err
+	}
+	return t, nil
+}
+
+func readCurveJSON(path string) (content.Curve, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// An import that emitted an empty curve writes no file; treat
+			// that as a valid cached result.
+			return content.Curve{Sections: map[string][]content.CurvePoint{}}, nil
+		}
+		return content.Curve{}, err
+	}
+	var c content.Curve
+	if err := json.Unmarshal(raw, &c); err != nil {
+		return content.Curve{}, err
+	}
+	return c, nil
 }
 
 func rasterizeAll(ctx context.Context, log *slog.Logger, in Input, dpi int, subdir string) ([]string, map[string]string, error) {

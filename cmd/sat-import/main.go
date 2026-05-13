@@ -57,6 +57,7 @@ func main() {
 		consistency = flag.Int("consistency", 3, "self-consistency rounds per MCQ page (>=1)")
 		dpiClassify = flag.Int("dpi-classify", 200, "DPI for the page-classifier rasterization pass")
 		dpiExtract  = flag.Int("dpi-extract", 300, "DPI for the question-extraction rasterization pass")
+		force       = flag.Bool("force", false, "bypass the on-disk import cache and re-run even if inputs are unchanged")
 		validateIn  = flag.String("validate-only", "", "if set, parse this test JSON and run validation; no LLM calls")
 	)
 	flag.Parse()
@@ -130,6 +131,8 @@ func main() {
 		ConsistencyN:   *consistency,
 		DPIClassify:    *dpiClassify,
 		DPIExtract:     *dpiExtract,
+		Fingerprint:    spec,
+		Force:          *force,
 	}
 	if _, err := pipeline.Run(ctx, logger, in); err != nil {
 		logger.Error("import", "err", err)
@@ -217,10 +220,12 @@ func validateOnly(path string, prof profile.Profile, logger *slog.Logger) error 
 	for _, m := range t.Modules {
 		for _, q := range m.Questions {
 			eq := pipeline.ExtractedQuestion{
+				Type:          q.Type,
 				StemMD:        q.StemMD,
 				HasStemFigure: q.StemFigure != nil,
 				PassageMD:     q.PassageMD,
 				AnswerLabel:   q.AnswerLabel,
+				AnswerValues:  q.AnswerValues,
 			}
 			for _, c := range q.Choices {
 				eq.Choices = append(eq.Choices, pipeline.ExtractedChoice{

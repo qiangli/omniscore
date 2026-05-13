@@ -78,7 +78,7 @@ export OMNI_MODEL=anthropic/claude-sonnet-4-6
 
 Optional `-host http://...` overrides the Ollama URL (default `http://localhost:11434`); ignored for cloud vendors. Each PDF takes ~5–15 minutes end-to-end on a local 90B vision model with `-consistency 3`; cloud vendors are typically 2–5× faster but cost money (~$10–30 per PDF on Sonnet 4.6, ~$4 on Gemini 2.5 Pro). LLM responses are cached under `<workdir>/llm-cache/` so re-runs of the same import cost zero LLM calls until you change the model or DPI.
 
-Default output for both importers is `-out data/omni-data` — they each append `<exam>/<slug>/` internally and emit `{test.json,curve.json,figures/}` together in one self-contained subfolder.
+Default output for both importers is `-out data/omni-data` — they each append `<exam>/<slug>/` internally and emit `{test.json, curve.json, figures/, raw/, .import-manifest.json}` together in one self-contained subfolder. `raw/` carries verbatim copies of the source PDFs so teachers/admins can audit the conversion against the originals; `.import-manifest.json` fingerprints the run (SHA-256 of every input PDF + DPI + consistency + the `-model` spec) so re-running with identical inputs is a no-op (cache hit: no LLM traffic, no rasterization). Pass `-force` to bypass the cache.
 
 ## Working conventions
 
