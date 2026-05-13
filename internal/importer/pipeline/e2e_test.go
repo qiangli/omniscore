@@ -35,7 +35,7 @@ func TestE2E_MockProvider_2014PDF(t *testing.T) {
 	}
 
 	workdir := t.TempDir()
-	outRoot := filepath.Join(workdir, "ap")
+	outRoot := workdir
 	ctx := context.Background()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 

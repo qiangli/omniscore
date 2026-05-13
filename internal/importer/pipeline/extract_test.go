@@ -159,7 +159,7 @@ func TestEmit_RoundTripWithRuntimeLoader(t *testing.T) {
 	// Emit a minimal AP test with the importer, then load it back through the
 	// runtime content loader.
 	dir := t.TempDir()
-	outRoot := filepath.Join(dir, "ap")
+	outRoot := dir
 	workdir := filepath.Join(dir, "workdir")
 
 	pageDir := filepath.Join(workdir, "pages")
@@ -226,7 +226,7 @@ func TestEmit_RoundTripWithRuntimeLoader(t *testing.T) {
 		t.Errorf("flagged: want 0, got %d", flagged)
 	}
 
-	raw, err := os.ReadFile(filepath.Join(outRoot, "tests", "ap-emit-test.json"))
+	raw, err := os.ReadFile(filepath.Join(outRoot, "ap", "ap-emit-test", "test.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,7 +250,7 @@ func TestEmit_RoundTripWithRuntimeLoader(t *testing.T) {
 		}
 	}
 
-	figDir := filepath.Join(outRoot, "figures", "ap-emit-test")
+	figDir := filepath.Join(outRoot, "ap", "ap-emit-test", "figures")
 	for _, name := range []string{"q2-stem.png", "q2-a.png", "q2-b.png", "q2-c.png", "q2-d.png", "q2-e.png"} {
 		if _, err := os.Stat(filepath.Join(figDir, name)); err != nil {
 			t.Errorf("figure %s missing: %v", name, err)

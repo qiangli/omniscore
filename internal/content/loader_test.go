@@ -64,17 +64,17 @@ func TestLoadFlatLegacy(t *testing.T) {
 	}
 }
 
-func TestLoadExamTypeSubdirs(t *testing.T) {
+func TestLoadPerTestSubfolder(t *testing.T) {
 	ctx := context.Background()
 	s := openTestStore(t)
 	root := t.TempDir()
 
-	writeJSON(t, filepath.Join(root, "sat", "tests", "sat-1.json"), content.Test{
+	writeJSON(t, filepath.Join(root, "sat", "sat-1", "test.json"), content.Test{
 		Slug: "sat-1", Title: "SAT 1", ExamType: "sat",
 		Modules: []content.Module{{ID: "rw", Section: "rw", Title: "RW", TimeLimitS: 600,
 			Questions: []content.Question{{ID: "q1", StemMD: "Q?", Choices: []content.Choice{{Label: "A"}}, AnswerLabel: "A"}}}},
 	})
-	writeJSON(t, filepath.Join(root, "ap", "tests", "ap-1.json"), content.Test{
+	writeJSON(t, filepath.Join(root, "ap", "ap-1", "test.json"), content.Test{
 		Slug: "ap-1", Title: "AP 1", ExamType: "ap", Subject: "calc_bc",
 		Modules: []content.Module{{ID: "mcq", Section: "mcq_no_calc", Title: "MCQ", TimeLimitS: 600,
 			Questions: []content.Question{{ID: "q1", StemMD: "Q?", Choices: []content.Choice{{Label: "A"}}, AnswerLabel: "A"}}}},
@@ -104,7 +104,7 @@ func TestLoadFigureSrcRewrite(t *testing.T) {
 	s := openTestStore(t)
 	root := t.TempDir()
 
-	writeJSON(t, filepath.Join(root, "ap", "tests", "demo.json"), content.Test{
+	writeJSON(t, filepath.Join(root, "ap", "demo", "test.json"), content.Test{
 		Slug: "demo", Title: "Demo", ExamType: "ap", Subject: "calc_bc",
 		Modules: []content.Module{{
 			ID: "mcq", Section: "mcq_calc", Title: "MCQ", TimeLimitS: 600,
@@ -152,16 +152,16 @@ func TestLoadStrayDirIgnored(t *testing.T) {
 	root := t.TempDir()
 
 	// One legitimate AP test...
-	writeJSON(t, filepath.Join(root, "ap", "tests", "ok.json"), content.Test{
+	writeJSON(t, filepath.Join(root, "ap", "ok", "test.json"), content.Test{
 		Slug: "ok", Title: "OK", ExamType: "ap",
 		Modules: []content.Module{{ID: "m", Section: "s", Title: "T", TimeLimitS: 60,
 			Questions: []content.Question{{ID: "q1", StemMD: "?", Choices: []content.Choice{{Label: "A"}}, AnswerLabel: "A"}}}},
 	})
-	// ...plus a stray .git dir and a "figures" sibling without tests/.
+	// ...plus a stray .git dir and an empty subdir without test.json.
 	if err := os.MkdirAll(filepath.Join(root, ".git"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(root, "ap", "figures", "ok"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "ap", "scratch"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -173,7 +173,7 @@ func TestLoadStrayDirIgnored(t *testing.T) {
 	}
 }
 
-func TestLoadMixedFlatAndExamSubdirs(t *testing.T) {
+func TestLoadMixedFlatAndPerTestSubfolder(t *testing.T) {
 	ctx := context.Background()
 	s := openTestStore(t)
 	root := t.TempDir()
@@ -184,8 +184,8 @@ func TestLoadMixedFlatAndExamSubdirs(t *testing.T) {
 		Modules: []content.Module{{ID: "rw", Section: "rw", Title: "RW", TimeLimitS: 60,
 			Questions: []content.Question{{ID: "q1", StemMD: "?", Choices: []content.Choice{{Label: "A"}}, AnswerLabel: "A"}}}},
 	})
-	// Per-exam-type subdir alongside.
-	writeJSON(t, filepath.Join(root, "ap", "tests", "ap.json"), content.Test{
+	// Per-test subfolder alongside.
+	writeJSON(t, filepath.Join(root, "ap", "ap", "test.json"), content.Test{
 		Slug: "ap", Title: "AP", ExamType: "ap",
 		Modules: []content.Module{{ID: "mcq", Section: "mcq", Title: "MCQ", TimeLimitS: 60,
 			Questions: []content.Question{{ID: "q1", StemMD: "?", Choices: []content.Choice{{Label: "A"}}, AnswerLabel: "A"}}}},

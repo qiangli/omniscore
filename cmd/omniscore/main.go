@@ -23,9 +23,13 @@ import (
 func main() {
 	bind := flag.String("bind", "0.0.0.0:28080", "host:port to bind the HTTP server")
 	dbPath := flag.String("db", "omniscore.db", "SQLite database path")
-	contentRoot := flag.String("content", "content", "directory containing per-exam-type subdirs (sat/, ap/, ...) each with tests/ + curves/, OR a flat tests/+curves/ layout")
-	keyPath := flag.String("key", "omniscore.key", "HMAC cookie signing key file (auto-created)")
+	contentRoot := flag.String("content", "content", "directory containing per-exam-type subdirs (sat/, ap/, ...) each with per-slug subdirs holding test.json/curve.json/figures/, OR a flat tests/+curves/ layout. Accepts ~ for $HOME.")
+	keyPath := flag.String("key", "omniscore.key", "HMAC cookie signing key file (auto-created). Accepts ~ for $HOME.")
 	flag.Parse()
+
+	*dbPath = expandHome(*dbPath)
+	*contentRoot = expandHome(*contentRoot)
+	*keyPath = expandHome(*keyPath)
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
@@ -97,6 +101,27 @@ func printJoinInfo(logger *slog.Logger, bind string) {
 		}
 	}
 	fmt.Fprintln(os.Stdout)
+}
+
+// expandHome rewrites a leading "~" or "~/" to the current user's home dir
+// so users can pass -content ~/omni-data without manual $HOME expansion. A
+// failed lookup leaves the path unchanged.
+func expandHome(p string) string {
+	if p == "" || (p[0] != '~') {
+		return p
+	}
+	if p == "~" {
+		if home, err := os.UserHomeDir(); err == nil {
+			return home
+		}
+		return p
+	}
+	if len(p) >= 2 && p[1] == '/' {
+		if home, err := os.UserHomeDir(); err == nil {
+			return home + p[1:]
+		}
+	}
+	return p
 }
 
 func lanIPv4s() []string {

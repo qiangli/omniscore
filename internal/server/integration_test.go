@@ -198,9 +198,9 @@ func writeJSON(path string, v any) error {
 }
 
 // TestFullSessionFlow_AP mirrors TestFullSessionFlow but exercises the AP path:
-// per-exam-type subdir layout, exam_type="ap", a 5-choice MCQ, embedded stem
-// figure, and AP section codes (mcq_no_calc / mcq_calc). It is the contract
-// the Phase 4 PDF importer's output must satisfy.
+// per-test self-contained subfolder layout, exam_type="ap", a 5-choice MCQ,
+// embedded stem figure, and AP section codes (mcq_no_calc / mcq_calc). It is
+// the contract the PDF importer's output must satisfy.
 func TestFullSessionFlow_AP(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
@@ -213,21 +213,16 @@ func TestFullSessionFlow_AP(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = s.Close() })
 
-	// Per-exam-type layout under <dir>/ap/{tests,curves,figures}/.
-	apTests := filepath.Join(dir, "ap", "tests")
-	apCurves := filepath.Join(dir, "ap", "curves")
-	apFigures := filepath.Join(dir, "ap", "figures", "ap-fixture")
-	for _, p := range []string{apTests, apCurves, apFigures} {
-		if err := os.MkdirAll(p, 0o755); err != nil {
-			t.Fatal(err)
-		}
+	// Per-test layout under <dir>/ap/<slug>/{test.json,curve.json,figures/}.
+	const fixtureSlug = "ap-fixture"
+	slugDir := filepath.Join(dir, "ap", fixtureSlug)
+	apFigures := filepath.Join(slugDir, "figures")
+	if err := os.MkdirAll(apFigures, 0o755); err != nil {
+		t.Fatal(err)
 	}
-	// Plant a tiny PNG so figure HTTP test can be added later if desired.
 	if err := os.WriteFile(filepath.Join(apFigures, "q3.png"), []byte("\x89PNG\r\n\x1a\nfake"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-
-	const fixtureSlug = "ap-fixture"
 	fixture := content.Test{
 		Slug: fixtureSlug, Title: "AP Fixture", ExamType: "ap", Subject: "calc_bc",
 		Modules: []content.Module{
@@ -263,7 +258,7 @@ func TestFullSessionFlow_AP(t *testing.T) {
 			},
 		},
 	}
-	if err := writeJSON(filepath.Join(apTests, fixtureSlug+".json"), fixture); err != nil {
+	if err := writeJSON(filepath.Join(slugDir, "test.json"), fixture); err != nil {
 		t.Fatal(err)
 	}
 	curve := content.Curve{
@@ -273,7 +268,7 @@ func TestFullSessionFlow_AP(t *testing.T) {
 			"mcq_calc":    {{Raw: 0, Scaled: 1}, {Raw: 1, Scaled: 5}},
 		},
 	}
-	if err := writeJSON(filepath.Join(apCurves, fixtureSlug+".json"), curve); err != nil {
+	if err := writeJSON(filepath.Join(slugDir, "curve.json"), curve); err != nil {
 		t.Fatal(err)
 	}
 	if err := content.LoadFromDisk(ctx, s, dir); err != nil {

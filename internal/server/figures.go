@@ -9,8 +9,9 @@ import (
 )
 
 // serveFigure resolves /api/figures/<exam>/<slug>/<rest> to a file under
-// FiguresRoot/<exam>/figures/<slug>/<rest>. Path-traversal protected: the
-// cleaned absolute path must remain inside the per-slug figures directory.
+// FiguresRoot/<exam>/<slug>/figures/<rest> — the per-test self-contained
+// content layout. Path-traversal protected: the cleaned absolute path must
+// remain inside the per-slug figures directory.
 func (s *Server) serveFigure(w http.ResponseWriter, r *http.Request) {
 	exam := chi.URLParam(r, "exam")
 	slug := chi.URLParam(r, "slug")
@@ -19,7 +20,7 @@ func (s *Server) serveFigure(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "missing path segment")
 		return
 	}
-	base := filepath.Join(s.FiguresRoot, exam, "figures", slug)
+	base := filepath.Join(s.FiguresRoot, exam, slug, "figures")
 	full := filepath.Clean(filepath.Join(base, rest))
 	cleanedBase := filepath.Clean(base) + string(filepath.Separator)
 	if !strings.HasPrefix(full, cleanedBase) {

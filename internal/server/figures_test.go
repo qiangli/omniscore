@@ -26,8 +26,8 @@ func TestServeFigure(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = s.Close() })
 
-	// Plant a real figure file at <dir>/ap/figures/demo/q1.png.
-	figDir := filepath.Join(dir, "ap", "figures", "demo")
+	// Plant a real figure file at <dir>/ap/demo/figures/q1.png.
+	figDir := filepath.Join(dir, "ap", "demo", "figures")
 	if err := os.MkdirAll(figDir, 0o755); err != nil {
 		t.Fatal(err)
 	}

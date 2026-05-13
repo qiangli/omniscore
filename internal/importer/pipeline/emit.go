@@ -40,19 +40,19 @@ type EmitModule struct {
 // Emit writes the test JSON, copies figure PNGs, writes the curve JSON, and
 // emits a review-log markdown summarizing every flagged question.
 //
-// Output layout:
+// Output layout (per-test self-contained subfolder):
 //
-//	<OutRoot>/tests/<slug>.json
-//	<OutRoot>/curves/<slug>.json
-//	<OutRoot>/figures/<slug>/qNN-stem.png
+//	<OutRoot>/<ExamType>/<Slug>/test.json
+//	<OutRoot>/<ExamType>/<Slug>/curve.json
+//	<OutRoot>/<ExamType>/<Slug>/figures/qNN-stem.png
 //	<Workdir>/.review/<slug>.md
 //
 // Returns the count of questions written and the count flagged for review.
 func Emit(in EmitInput) (written, flagged int, err error) {
-	figuresDir := filepath.Join(in.OutRoot, "figures", in.Slug)
+	slugDir := filepath.Join(in.OutRoot, in.Profile.ExamType, in.Slug)
+	figuresDir := filepath.Join(slugDir, "figures")
 	for _, dir := range []string{
-		filepath.Join(in.OutRoot, "tests"),
-		filepath.Join(in.OutRoot, "curves"),
+		slugDir,
 		figuresDir,
 		filepath.Join(in.Workdir, ".review"),
 	} {
@@ -142,10 +142,10 @@ func Emit(in EmitInput) (written, flagged int, err error) {
 		t.Modules = append(t.Modules, mod)
 	}
 
-	if err := writeIndentedJSON(filepath.Join(in.OutRoot, "tests", in.Slug+".json"), t); err != nil {
+	if err := writeIndentedJSON(filepath.Join(slugDir, "test.json"), t); err != nil {
 		return written, flagged, err
 	}
-	if err := writeIndentedJSON(filepath.Join(in.OutRoot, "curves", in.Slug+".json"), in.Curve); err != nil {
+	if err := writeIndentedJSON(filepath.Join(slugDir, "curve.json"), in.Curve); err != nil {
 		return written, flagged, err
 	}
 

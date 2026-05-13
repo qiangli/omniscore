@@ -42,7 +42,7 @@ func main() {
 		title       = flag.String("title", "", "test title shown to students")
 		modelSpec   = flag.String("model", "", "vision model spec as vendor/model, e.g. anthropic/claude-sonnet-4-6. Falls back to $OMNI_MODEL.")
 		ollamaHost  = flag.String("host", "http://localhost:11434", "Ollama server URL (only used when -model starts with ollama/)")
-		outRoot     = flag.String("out", "data/omni-data/ap", "output root: writes <out>/tests, <out>/curves, <out>/figures/<slug>")
+		outRoot     = flag.String("out", "data/omni-data", "content root: writes <out>/ap/<slug>/{test.json,curve.json,figures/}")
 		workdir     = flag.String("workdir", "", "scratch dir for page rasters + LLM cache + review log (default: .import-cache/<slug>)")
 		consistency = flag.Int("consistency", 3, "self-consistency rounds per MCQ page (>=1)")
 		dpiClassify = flag.Int("dpi-classify", 200, "DPI for the page-classifier rasterization pass")

@@ -231,7 +231,7 @@ func Run(ctx context.Context, log *slog.Logger, in Input) (Result, error) {
 	log.Info("emit done",
 		"written", written,
 		"flagged", flagged,
-		"out", filepath.Join(in.OutRoot, "tests", in.Slug+".json"),
+		"out", filepath.Join(in.OutRoot, in.Profile.ExamType, in.Slug, "test.json"),
 		"review", filepath.Join(in.Workdir, ".review", in.Slug+".md"),
 		"elapsed", res.Elapsed.String())
 	return res, nil
