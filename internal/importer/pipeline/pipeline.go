@@ -141,7 +141,7 @@ func Run(ctx context.Context, log *slog.Logger, in Input) (Result, error) {
 	//    extracts using each module's prompt against the full answer-key page
 	//    set and merges per-module. For AP there's exactly one module-prompt
 	//    pass since the prompt set is uniform.
-	keyByModule := map[string]map[int]string{}
+	keyByModule := map[string]map[int]AnswerKeyEntry{}
 	if in.Profile.Features.PerModuleAnswerKey {
 		for _, m := range in.Profile.Modules {
 			k, err := ExtractAnswerKey(ctx, in.Provider, in.Profile, m, answerKeyPages)
@@ -292,7 +292,7 @@ func stringifyClassCount(in map[PageClass]int) map[string]int {
 	return out
 }
 
-func sumKeys(m map[string]map[int]string) int {
+func sumKeys(m map[string]map[int]AnswerKeyEntry) int {
 	n := 0
 	for _, v := range m {
 		n += len(v)

@@ -3,21 +3,39 @@
 // metadata (choice labels, sections, time limits, curve scale) with the
 // exam-specific prompt set so that the pipeline itself stays exam-agnostic.
 //
-// Two profile factories ship in this package: AP() and (in a follow-up commit)
-// SAT(). Callers pick one, hand it to pipeline.Run, and the pipeline does the
-// rest.
+// Two profile factories ship in this package: AP() and SAT(). New exams
+// (ACT, PSAT, GRE, …) plug in by adding a new factory in this package.
 package profile
+
+import "slices"
 
 // Profile captures every exam-specific knob the importer pipeline needs.
 type Profile struct {
-	ExamType      string       // "ap" | "sat"
+	ExamType      string       // "ap" | "sat" | future: "act", "psat", "gre", …
 	Subject       string       // "calc_bc" | ""
 	ChoiceLabels  []string     // ["A".."E"] for AP, ["A".."D"] for SAT
 	Modules       []ModuleSpec // ordered; one entry per timed module
 	CurveScale    CurveScale   // 1..5 for AP, 200..800 for SAT
 	CurveSections []string     // section IDs the curve extractor emits, e.g. ["mcq_total"] or ["rw","math"]
+	// QuestionTypes lists the content.QuestionType* values this exam produces.
+	// Defaults to ["mcq"] if empty. SAT() opts in to ["mcq", "spr"] to permit
+	// Math student-produced-response items in addition to MCQ. The pipeline
+	// uses this list to validate classifier/extract output.
+	QuestionTypes []string
 	Prompts       PromptSet
 	Features      Features
+}
+
+// SupportsQuestionType returns true if the profile declared the given type.
+// An empty QuestionTypes list defaults to ["mcq"] for back-compat.
+func (p Profile) SupportsQuestionType(t string) bool {
+	if len(p.QuestionTypes) == 0 {
+		return t == "" || t == "mcq"
+	}
+	if t == "" {
+		t = "mcq"
+	}
+	return slices.Contains(p.QuestionTypes, t)
 }
 
 // ModuleSpec is one timed section the importer should emit. ClassifierLabel

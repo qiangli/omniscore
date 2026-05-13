@@ -10,13 +10,19 @@ export type Choice = {
   figure?: Figure;
 };
 
+// QuestionType controls the renderer and the grader. New types are added by
+// extending this union (frontend) + registering a grader (backend). An empty
+// `type` field is treated as "mcq" for back-compat with existing JSON.
+export type QuestionType = "mcq" | "spr";
+
 export type Question = {
   id: string;
+  type?: QuestionType;
   passage_md?: string;
   passage_figure?: Figure;
   stem_md: string;
   stem_figure?: Figure;
-  choices: Choice[];
+  choices?: Choice[]; // populated for mcq; absent for spr
 };
 
 export type Module = {
@@ -97,8 +103,12 @@ export type Summary = {
   state: SessionState;
   raw_total: number;
   scaled_total: number;
+  scaled_total_low?: number;
+  scaled_total_high?: number;
   by_section_raw: Record<string, number>;
   by_section_scaled: Record<string, number>;
+  by_section_scaled_low?: Record<string, number>;
+  by_section_scaled_high?: Record<string, number>;
   questions: Result[];
 };
 

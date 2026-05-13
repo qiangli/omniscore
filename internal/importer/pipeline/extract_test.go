@@ -138,7 +138,11 @@ func TestReconcileAnswers(t *testing.T) {
 		{QuestionNumber: 3, AnswerLabel: "B"},
 		{QuestionNumber: 4, AnswerLabel: ""},
 	}
-	key := map[int]string{1: "C", 2: "A", 3: "D"}
+	key := map[int]pipeline.AnswerKeyEntry{
+		1: {QuestionNumber: 1, Label: "C"},
+		2: {QuestionNumber: 2, Label: "A"},
+		3: {QuestionNumber: 3, Label: "D"},
+	}
 	out := pipeline.ReconcileAnswers(qs, key)
 
 	if out[0].AnswerLabel != "C" {

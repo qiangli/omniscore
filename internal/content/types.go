@@ -5,7 +5,7 @@ package content
 type Test struct {
 	Slug     string   `json:"slug"`
 	Title    string   `json:"title"`
-	ExamType string   `json:"exam_type"`         // "sat" | "ap"
+	ExamType string   `json:"exam_type"`         // "sat" | "ap" | future: "act", "psat", "gre", ...
 	Subject  string   `json:"subject,omitempty"` // e.g. "calc_bc" — AP subject code
 	Modules  []Module `json:"modules"`
 }
@@ -19,15 +19,39 @@ type Module struct {
 	Questions  []Question `json:"questions"`
 }
 
-// Question is one stem (with optional passage and figures) and a set of lettered choices.
+// QuestionType selects how a question is rendered, answered, and graded.
+// New types are added by registering a grader in internal/grading and a
+// renderer in the frontend; the schema itself stays unchanged.
+//
+// Conventions:
+//   - "" (empty) is treated as "mcq" for back-compat with existing AP/SAT JSON.
+//   - "mcq"  — single-select multiple choice. Choices is populated. AnswerLabel
+//     names the correct choice (e.g. "C"). AnswerValues is unused.
+//   - "spr"  — student-produced response (SAT Math fill-in / future short-answer).
+//     Choices is empty. AnswerValues is the list of accepted canonical forms
+//     (e.g. ["0.5", "1/2", ".5"] or ["2; -12"] for ordered pairs). The grader
+//     normalizes the submitted string before membership comparison.
+//
+// Future types (multi-select, matching, essay, etc.) plug in by reusing
+// AnswerValues with type-specific semantics.
+const (
+	QuestionTypeMCQ = "mcq"
+	QuestionTypeSPR = "spr"
+)
+
+// Question is one prompt (with optional passage and figures) and a typed
+// answer specification. Type drives both the renderer (frontend) and the
+// grader (internal/grading); see QuestionType* constants.
 type Question struct {
 	ID            string   `json:"id"`
+	Type          string   `json:"type,omitempty"` // "" → "mcq"; see QuestionType* constants
 	PassageMD     string   `json:"passage_md,omitempty"`
 	PassageFigure *Figure  `json:"passage_figure,omitempty"`
 	StemMD        string   `json:"stem_md"`
 	StemFigure    *Figure  `json:"stem_figure,omitempty"`
-	Choices       []Choice `json:"choices"`
-	AnswerLabel   string   `json:"answer_label,omitempty"`
+	Choices       []Choice `json:"choices,omitempty"`       // populated for mcq; empty for spr
+	AnswerLabel   string   `json:"answer_label,omitempty"`  // mcq: correct choice label
+	AnswerValues  []string `json:"answer_values,omitempty"` // spr: accepted answer forms (and future types)
 	RationaleMD   string   `json:"rationale_md,omitempty"`
 }
 
@@ -53,10 +77,19 @@ type Curve struct {
 	Sections map[string][]CurvePoint `json:"sections"`
 }
 
-// CurvePoint maps one raw score to one scaled score for a given section.
+// CurvePoint maps one raw score to a scaled score for a given section.
+//
+// Two encodings are supported:
+//   - Single point (AP exams, legacy SAT demo): set Scaled only.
+//   - Range (real SAT / PSAT, where the official scoring guide prints a
+//     [lower, upper] band per raw score): set ScaledLow and ScaledHigh.
+//     Scaled, if also set, should equal the midpoint; if absent the loader
+//     fills it from (ScaledLow+ScaledHigh)/2 for back-compat.
 type CurvePoint struct {
-	Raw    int `json:"raw"`
-	Scaled int `json:"scaled"`
+	Raw        int `json:"raw"`
+	Scaled     int `json:"scaled,omitempty"`
+	ScaledLow  int `json:"scaled_low,omitempty"`
+	ScaledHigh int `json:"scaled_high,omitempty"`
 }
 
 // StripAnswers returns a deep copy of t with answer keys + rationales removed.
@@ -70,6 +103,7 @@ func StripAnswers(t Test) Test {
 		for j, q := range m.Questions {
 			qq := q
 			qq.AnswerLabel = ""
+			qq.AnswerValues = nil
 			qq.RationaleMD = ""
 			out.Modules[i].Questions[j] = qq
 		}

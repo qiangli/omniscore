@@ -85,10 +85,12 @@ func Emit(in EmitInput) (written, flagged int, err error) {
 		}
 		for _, q := range m.Questions {
 			cq := content.Question{
-				ID:          fmt.Sprintf("%s-q%d", m.Section, q.QuestionNumber),
-				StemMD:      q.StemMD,
-				PassageMD:   q.PassageMD,
-				AnswerLabel: q.AnswerLabel,
+				ID:           fmt.Sprintf("%s-q%d", m.Section, q.QuestionNumber),
+				Type:         q.Type, // "" → "mcq" downstream
+				StemMD:       q.StemMD,
+				PassageMD:    q.PassageMD,
+				AnswerLabel:  q.AnswerLabel,
+				AnswerValues: q.AnswerValues,
 			}
 			if q.HasStemFigure {
 				figName := fmt.Sprintf("q%d-stem.png", q.QuestionNumber)

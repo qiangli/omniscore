@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/qiangli/omniscore/internal/content"
+	"github.com/qiangli/omniscore/internal/grading"
 	"github.com/qiangli/omniscore/internal/scoring"
 	"github.com/qiangli/omniscore/internal/store"
 )
@@ -209,17 +210,27 @@ type Result struct {
 }
 
 // Summary is the aggregate result of a completed session.
+//
+// Scaled scores are reported both as a single midpoint (ScaledTotal,
+// BySectionScaled) and as a [low, high] band (ScaledTotalLow/High,
+// BySectionScaledLow/High). For AP and the legacy SAT demo the band
+// collapses to low == high == midpoint; for real SAT curves the band
+// matches the printed "your score is between X and Y" wording.
 type Summary struct {
-	SessionID       string         `json:"session_id"`
-	TestSlug        string         `json:"test_slug"`
-	ExamType        string         `json:"exam_type,omitempty"`
-	Subject         string         `json:"subject,omitempty"`
-	State           State          `json:"state"`
-	RawTotal        int            `json:"raw_total"`
-	ScaledTotal     int            `json:"scaled_total"`
-	BySection       map[string]int `json:"by_section_raw"`
-	BySectionScaled map[string]int `json:"by_section_scaled"`
-	Questions       []Result       `json:"questions"`
+	SessionID             string         `json:"session_id"`
+	TestSlug              string         `json:"test_slug"`
+	ExamType              string         `json:"exam_type,omitempty"`
+	Subject               string         `json:"subject,omitempty"`
+	State                 State          `json:"state"`
+	RawTotal              int            `json:"raw_total"`
+	ScaledTotal           int            `json:"scaled_total"`
+	ScaledTotalLow        int            `json:"scaled_total_low,omitempty"`
+	ScaledTotalHigh       int            `json:"scaled_total_high,omitempty"`
+	BySection             map[string]int `json:"by_section_raw"`
+	BySectionScaled       map[string]int `json:"by_section_scaled"`
+	BySectionScaledLow    map[string]int `json:"by_section_scaled_low,omitempty"`
+	BySectionScaledHigh   map[string]int `json:"by_section_scaled_high,omitempty"`
+	Questions             []Result       `json:"questions"`
 }
 
 // Submit tallies the session and stores raw + scaled totals.
@@ -242,12 +253,14 @@ func Submit(ctx context.Context, s *store.Store, sessionID string) (Summary, err
 	}
 
 	sum := Summary{
-		SessionID:       sessionID,
-		TestSlug:        sess.TestSlug,
-		ExamType:        t.ExamType,
-		Subject:         t.Subject,
-		BySection:       map[string]int{},
-		BySectionScaled: map[string]int{},
+		SessionID:           sessionID,
+		TestSlug:            sess.TestSlug,
+		ExamType:            t.ExamType,
+		Subject:             t.Subject,
+		BySection:           map[string]int{},
+		BySectionScaled:     map[string]int{},
+		BySectionScaledLow:  map[string]int{},
+		BySectionScaledHigh: map[string]int{},
 	}
 	for _, m := range t.Modules {
 		for _, q := range m.Questions {
@@ -255,13 +268,13 @@ func Submit(ctx context.Context, s *store.Store, sessionID string) (Summary, err
 				QuestionID:  q.ID,
 				Section:     m.Section,
 				ModuleID:    m.ID,
-				Correct:     q.AnswerLabel,
+				Correct:     grading.CorrectDisplay(q),
 				RationaleMD: q.RationaleMD,
 			}
 			if ans, ok := answered[q.ID]; ok {
 				r.Chosen = ans.Choice
 				r.TimeOnQuestionMS = ans.TimeOnQuestionMS
-				if ans.Choice == q.AnswerLabel {
+				if grading.IsCorrect(q, ans.Choice) {
 					r.IsCorrect = true
 					sum.RawTotal++
 					sum.BySection[m.Section]++
@@ -271,26 +284,27 @@ func Submit(ctx context.Context, s *store.Store, sessionID string) (Summary, err
 		}
 	}
 	// Scale per section, then sum.
+	scaleSection := func(sec string, raw int) {
+		low, high, ok, err := scoring.ScaleRange(ctx, s, sess.TestSlug, scoring.Section(sec), raw)
+		if err != nil || !ok {
+			return
+		}
+		mid := (low + high) / 2
+		sum.BySectionScaled[sec] = mid
+		sum.BySectionScaledLow[sec] = low
+		sum.BySectionScaledHigh[sec] = high
+		sum.ScaledTotal += mid
+		sum.ScaledTotalLow += low
+		sum.ScaledTotalHigh += high
+	}
 	for sec, raw := range sum.BySection {
-		scaled, ok, err := scoring.Scale(ctx, s, sess.TestSlug, scoring.Section(sec), raw)
-		if err != nil {
-			return Summary{}, err
-		}
-		if !ok {
-			continue
-		}
-		sum.BySectionScaled[sec] = scaled
-		sum.ScaledTotal += scaled
+		scaleSection(sec, raw)
 	}
 	// Sections with raw=0 may not be reflected in BySection map; include them too.
 	for _, m := range t.Modules {
 		if _, seen := sum.BySection[m.Section]; !seen {
 			sum.BySection[m.Section] = 0
-			scaled, ok, err := scoring.Scale(ctx, s, sess.TestSlug, scoring.Section(m.Section), 0)
-			if err == nil && ok {
-				sum.BySectionScaled[m.Section] = scaled
-				sum.ScaledTotal += scaled
-			}
+			scaleSection(m.Section, 0)
 		}
 	}
 

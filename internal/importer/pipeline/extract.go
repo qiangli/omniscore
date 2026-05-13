@@ -21,21 +21,32 @@ type ExtractedChoice struct {
 	HasFigure bool   `json:"has_figure"`
 }
 
-// ExtractedQuestion is one MCQ pulled from one page image. AnswerLabel is
-// blank until ReconcileAnswers fills it in. PassageMD/HasPassageFigure stay
-// empty unless the profile's ModuleSpec sets AcceptsPassage.
+// ExtractedQuestion is one question pulled from one page image. AnswerLabel
+// (MCQ) / AnswerValues (SPR) stay blank until ReconcileAnswers fills them in.
+// PassageMD/HasPassageFigure stay empty unless the profile's ModuleSpec sets
+// AcceptsPassage. Type defaults to "mcq" when blank.
 type ExtractedQuestion struct {
 	PageSource       string            `json:"page_source"`
 	QuestionNumber   int               `json:"question_number"`
+	Type             string            `json:"type,omitempty"` // "" → "mcq"; "spr" for student-produced response
 	StemMD           string            `json:"stem_md"`
 	HasStemFigure    bool              `json:"has_stem_figure"`
 	PassageMD        string            `json:"passage_md,omitempty"`
 	HasPassageFigure bool              `json:"has_passage_figure,omitempty"`
-	Choices          []ExtractedChoice `json:"choices"`
+	Choices          []ExtractedChoice `json:"choices,omitempty"`
 	AnswerLabel      string            `json:"answer_label,omitempty"`
+	AnswerValues     []string          `json:"answer_values,omitempty"`
 	NeedsReview      bool              `json:"needs_review"`
 	ReviewNotes      []string          `json:"review_notes,omitempty"`
 	RawResponses     []string          `json:"raw_responses,omitempty"`
+}
+
+// EffectiveType returns the question type with the "" → "mcq" default applied.
+func (q ExtractedQuestion) EffectiveType() string {
+	if q.Type == "" {
+		return "mcq"
+	}
+	return q.Type
 }
 
 type extractResp struct {
@@ -136,6 +147,19 @@ func mergeRounds(rounds [][]ExtractedQuestion, pagePath string, raws []string, e
 }
 
 func voteOne(obs []ExtractedQuestion, expectedChoices int) ExtractedQuestion {
+	// Majority vote on question type first; SPR observations skip the choice
+	// merge entirely.
+	typeVotes := map[string]int{}
+	for _, o := range obs {
+		typeVotes[o.EffectiveType()]++
+	}
+	bestType, bestTypeN := "mcq", 0
+	for t, n := range typeVotes {
+		if n > bestTypeN {
+			bestType, bestTypeN = t, n
+		}
+	}
+
 	counts := map[int]int{}
 	for _, o := range obs {
 		counts[len(o.Choices)]++
@@ -146,13 +170,23 @@ func voteOne(obs []ExtractedQuestion, expectedChoices int) ExtractedQuestion {
 			bestCount, bestN = c, n
 		}
 	}
+	if bestType == "spr" {
+		bestCount = 0
+	}
 
 	var seed ExtractedQuestion
 	for _, o := range obs {
-		if len(o.Choices) == bestCount {
+		if o.EffectiveType() == bestType && len(o.Choices) == bestCount {
 			seed = o
 			break
 		}
+	}
+	if seed.QuestionNumber == 0 && len(obs) > 0 {
+		seed = obs[0]
+	}
+	seed.Type = bestType
+	if bestType == "mcq" {
+		seed.Type = ""
 	}
 
 	stems := make([]string, 0, len(obs))
@@ -217,7 +251,12 @@ func voteOne(obs []ExtractedQuestion, expectedChoices int) ExtractedQuestion {
 	}
 	seed.Choices = choices
 
-	if len(counts) > 1 {
+	if len(typeVotes) > 1 {
+		seed.NeedsReview = true
+		seed.ReviewNotes = append(seed.ReviewNotes,
+			fmt.Sprintf("rounds disagree on question type: %v", typeVotes))
+	}
+	if bestType != "spr" && len(counts) > 1 {
 		seed.NeedsReview = true
 		seed.ReviewNotes = append(seed.ReviewNotes,
 			fmt.Sprintf("rounds disagree on choice count: %v", counts))

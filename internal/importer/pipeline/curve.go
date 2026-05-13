@@ -12,10 +12,22 @@ import (
 	"github.com/qiangli/omniscore/internal/importer/vision"
 )
 
+// curveRange is the union shape across exam profiles:
+//
+//   - AP composite curve prompt emits {raw_min, raw_max, scaled} (range form).
+//   - SAT curve prompt emits {raw, scaled_low, scaled_high} (single-row +
+//     lower/upper band form).
+//
+// expandRanges handles both: when Raw is set, it's a single-row entry and
+// Scaled is taken from ScaledLow/ScaledHigh; when RawMin..RawMax is set,
+// every raw in that inclusive range gets the same Scaled value.
 type curveRange struct {
-	RawMin int `json:"raw_min"`
-	RawMax int `json:"raw_max"`
-	Scaled int `json:"scaled"`
+	RawMin     int `json:"raw_min,omitempty"`
+	RawMax     int `json:"raw_max,omitempty"`
+	Raw        int `json:"raw,omitempty"`
+	Scaled     int `json:"scaled,omitempty"`
+	ScaledLow  int `json:"scaled_low,omitempty"`
+	ScaledHigh int `json:"scaled_high,omitempty"`
 }
 
 type curveResp struct {
@@ -99,31 +111,44 @@ func parseCurve(raw string) (curveResp, error) {
 	return r, nil
 }
 
-// expandRanges turns sparse range entries into a per-raw-value point list. If
-// ranges overlap, the higher scaled value wins. The runtime scorer clamps to
-// the nearest neighbor for raw values outside the supplied range.
+// expandRanges turns sparse range entries into a per-raw-value point list.
+// Supports both the AP (raw_min..raw_max, scaled) and SAT (raw,
+// scaled_low/scaled_high) shapes. When the same raw appears twice the entry
+// with the higher midpoint wins.
 func expandRanges(ranges []curveRange) []content.CurvePoint {
-	scoreFor := map[int]int{}
-	for _, r := range ranges {
-		if r.RawMax < r.RawMin {
-			r.RawMin, r.RawMax = r.RawMax, r.RawMin
+	pointFor := map[int]content.CurvePoint{}
+	apply := func(raw int, scaled, low, high int) {
+		if scaled == 0 && (low != 0 || high != 0) {
+			scaled = (low + high) / 2
 		}
-		for i := r.RawMin; i <= r.RawMax; i++ {
-			if existing, ok := scoreFor[i]; !ok || r.Scaled > existing {
-				scoreFor[i] = r.Scaled
+		p := content.CurvePoint{Raw: raw, Scaled: scaled, ScaledLow: low, ScaledHigh: high}
+		if existing, ok := pointFor[raw]; !ok || p.Scaled > existing.Scaled {
+			pointFor[raw] = p
+		}
+	}
+	for _, r := range ranges {
+		switch {
+		case r.Raw != 0 || (r.RawMin == 0 && r.RawMax == 0 && (r.ScaledLow != 0 || r.ScaledHigh != 0)):
+			apply(r.Raw, r.Scaled, r.ScaledLow, r.ScaledHigh)
+		default:
+			if r.RawMax < r.RawMin {
+				r.RawMin, r.RawMax = r.RawMax, r.RawMin
+			}
+			for i := r.RawMin; i <= r.RawMax; i++ {
+				apply(i, r.Scaled, r.ScaledLow, r.ScaledHigh)
 			}
 		}
 	}
 	maxRaw := 0
-	for raw := range scoreFor {
+	for raw := range pointFor {
 		if raw > maxRaw {
 			maxRaw = raw
 		}
 	}
-	out := make([]content.CurvePoint, 0, len(scoreFor))
+	out := make([]content.CurvePoint, 0, len(pointFor))
 	for raw := 0; raw <= maxRaw; raw++ {
-		if scaled, ok := scoreFor[raw]; ok {
-			out = append(out, content.CurvePoint{Raw: raw, Scaled: scaled})
+		if p, ok := pointFor[raw]; ok {
+			out = append(out, p)
 		}
 	}
 	return out

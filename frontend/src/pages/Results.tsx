@@ -5,6 +5,15 @@ import { MDInline } from "../lib/markdown";
 import { sectionLabel } from "../lib/sectionLabels";
 import type { Summary } from "../lib/types";
 
+// fmtRange renders "low–high" when the curve carries a band (real SAT) and
+// just the single value otherwise (AP, legacy demo).
+function fmtRange(mid: number, low?: number, high?: number): string {
+  if (low != null && high != null && low !== high) {
+    return `${low}–${high}`;
+  }
+  return String(mid);
+}
+
 export function Results() {
   const [, params] = useRoute("/results/:sessionId");
   const sessionId = params?.sessionId ?? "";
@@ -31,7 +40,11 @@ export function Results() {
       <div className="mb-8 bg-white border os-rule rounded-xl p-6">
         <div className="text-sm text-ink/60">Scaled score</div>
         <div className="text-5xl font-semibold tabular-nums">
-          {summary.scaled_total}
+          {fmtRange(
+            summary.scaled_total,
+            summary.scaled_total_low,
+            summary.scaled_total_high,
+          )}
         </div>
         <div className="mt-4 grid grid-cols-2 gap-4">
           {Object.entries(summary.by_section_scaled).map(([sec, scaled]) => (
@@ -39,7 +52,13 @@ export function Results() {
               <div className="text-xs uppercase tracking-wide text-ink/60">
                 {sectionLabel(summary.exam_type, summary.subject, sec)}
               </div>
-              <div className="text-2xl font-semibold tabular-nums">{scaled}</div>
+              <div className="text-2xl font-semibold tabular-nums">
+                {fmtRange(
+                  scaled,
+                  summary.by_section_scaled_low?.[sec],
+                  summary.by_section_scaled_high?.[sec],
+                )}
+              </div>
               <div className="text-xs text-ink/60">
                 Raw: {summary.by_section_raw[sec] ?? 0}
               </div>

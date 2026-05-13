@@ -185,9 +185,20 @@ func loadCurve(ctx context.Context, s *store.Store, curvePath, slug string) erro
 	}
 	for section, points := range c.Sections {
 		for _, p := range points {
+			low, high := p.ScaledLow, p.ScaledHigh
+			scaled := p.Scaled
+			// Range given but no explicit midpoint: derive it.
+			if scaled == 0 && (low != 0 || high != 0) {
+				scaled = (low + high) / 2
+			}
+			// Midpoint only: leave low/high NULL (legacy AP + demo SAT shape).
+			var lowArg, highArg any
+			if low != 0 || high != 0 {
+				lowArg, highArg = low, high
+			}
 			if _, err := tx.ExecContext(ctx,
-				`INSERT INTO test_scoring_curves(test_slug, section, raw_score, scaled_score) VALUES (?,?,?,?)`,
-				slug, section, p.Raw, p.Scaled,
+				`INSERT INTO test_scoring_curves(test_slug, section, raw_score, scaled_score, scaled_score_low, scaled_score_high) VALUES (?,?,?,?,?,?)`,
+				slug, section, p.Raw, scaled, lowArg, highArg,
 			); err != nil {
 				_ = tx.Rollback()
 				return err

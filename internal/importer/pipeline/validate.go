@@ -8,16 +8,48 @@ import (
 )
 
 // ValidateQuestion runs structural checks on one ExtractedQuestion, scoped
-// to the profile's choice set. Returns the set of issues found; an empty
-// slice means the question is publishable. Caller decides whether to treat
-// any issue as fatal (block emit) or as a review-log entry (proceed but flag).
+// to the profile's choice set and supported question types. Returns the set
+// of issues found; an empty slice means the question is publishable.
+// Caller decides whether to treat any issue as fatal (block emit) or as a
+// review-log entry (proceed but flag).
 func ValidateQuestion(prof profile.Profile, q ExtractedQuestion) []string {
 	var issues []string
+
+	qtype := q.EffectiveType()
+	if !prof.SupportsQuestionType(qtype) {
+		issues = append(issues, fmt.Sprintf("profile does not support question type %q", qtype))
+	}
 
 	if strings.TrimSpace(q.StemMD) == "" && !q.HasStemFigure {
 		issues = append(issues, "empty stem and no stem figure")
 	}
 
+	if iss := katexSanity(q.StemMD); iss != "" {
+		issues = append(issues, "stem: "+iss)
+	}
+
+	switch qtype {
+	case "spr":
+		if len(q.Choices) != 0 {
+			issues = append(issues, fmt.Sprintf("spr should have no choices, got %d", len(q.Choices)))
+		}
+		if len(q.AnswerValues) == 0 {
+			issues = append(issues, "spr has no answer_values")
+		}
+		for i, v := range q.AnswerValues {
+			if strings.TrimSpace(v) == "" {
+				issues = append(issues, fmt.Sprintf("spr answer_values[%d] is empty", i))
+			}
+		}
+	default: // mcq (including the legacy "" default)
+		issues = append(issues, validateMCQ(prof, q)...)
+	}
+
+	return issues
+}
+
+func validateMCQ(prof profile.Profile, q ExtractedQuestion) []string {
+	var issues []string
 	expectedLabels := prof.ChoiceLabels
 	expectedMax := len(expectedLabels)
 
@@ -56,11 +88,6 @@ func ValidateQuestion(prof profile.Profile, q ExtractedQuestion) []string {
 				fmt.Sprintf("answer_label %q is not among choice labels", q.AnswerLabel))
 		}
 	}
-
-	if iss := katexSanity(q.StemMD); iss != "" {
-		issues = append(issues, "stem: "+iss)
-	}
-
 	return issues
 }
 

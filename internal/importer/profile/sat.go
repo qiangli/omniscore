@@ -18,6 +18,7 @@ func SAT() Profile {
 		ChoiceLabels:  []string{"A", "B", "C", "D"},
 		CurveScale:    CurveScale{Min: 200, Max: 800},
 		CurveSections: []string{"rw", "math"},
+		QuestionTypes: []string{"mcq", "spr"},
 		Modules: []ModuleSpec{
 			{
 				ID:              "rw-1",
@@ -87,7 +88,14 @@ func satExtractPrompt(_ Profile, m ModuleSpec) string {
 - For each question, copy the left-pane reading passage into "passage_md" verbatim (preserve paragraph breaks as blank lines). Use Markdown for emphasis (*italic*, **bold**, > blockquote).
 - If the passage is a graph/chart/image rather than text, set "passage_md" to "" and "has_passage_figure": true.`
 	}
-	return `You are extracting Digital SAT (Bluebook) multiple-choice questions from a single page image. The section is "` + m.Section + `" — module "` + m.ID + `".
+	sprBlock := ""
+	if m.Section == "math" {
+		sprBlock = `
+- Math may contain TWO kinds of items:
+    1. Multiple-choice ("mcq") with choices A–D — the default.
+    2. Student-produced response ("spr") — the page has NO choices and instead shows an instructions strip such as "Enter your answer in the answer box" or a number-entry box. For SPR questions emit "type": "spr" and "choices": [] (leave the array empty).`
+	}
+	return `You are extracting Digital SAT (Bluebook) questions from a single page image. The section is "` + m.Section + `" — module "` + m.ID + `".
 
 Return ONE JSON object, no prose, no Markdown code fence, with this exact shape:
 
@@ -95,6 +103,7 @@ Return ONE JSON object, no prose, no Markdown code fence, with this exact shape:
   "questions": [
     {
       "question_number": <int>,
+      "type": "mcq" | "spr",
       "passage_md": "<reading passage in Markdown; empty string for math questions>",
       "has_passage_figure": <bool>,
       "stem_md": "<question prompt in Markdown; math in $...$ KaTeX>",
@@ -110,11 +119,12 @@ Return ONE JSON object, no prose, no Markdown code fence, with this exact shape:
 }
 
 Rules:
-- Exactly 4 choices labeled A–D.
+- "type" defaults to "mcq" when omitted.
+- MCQ items have exactly 4 choices labeled A–D.
 - All math expressions MUST use KaTeX-compatible $...$ delimiters. Use \\dfrac for prominent fractions.
-- Preserve original wording verbatim — do not paraphrase or summarize.` + passageBlock + `
+- Preserve original wording verbatim — do not paraphrase or summarize.` + passageBlock + sprBlock + `
 - If a question is illegible or partially cut off, include it anyway with whatever text you can read.
-- If the page has NO multiple-choice questions, return {"questions": []}.
+- If the page has NO questions, return {"questions": []}.
 - Output ONLY the JSON object. No explanation. No markdown fence.`
 }
 
@@ -127,12 +137,15 @@ Return ONE JSON object, no prose, no Markdown code fence:
   "answers": [
     {"question_number": 1, "label": "A"},
     {"question_number": 2, "label": "C"},
+    {"question_number": 6, "values": ["2520"]},
+    {"question_number": 14, "values": ["2", "-12"]},
     ...
   ]
 }
 
 Rules:
-- "label" must be one of A, B, C, D. If the printed key uses 1–4 numerics instead of letters, the post-processor maps 1→A, 2→B, 3→C, 4→D — emit either form.
+- For multiple-choice rows: emit {"label": "A|B|C|D"}. If the printed key uses 1–4 numerics instead of letters, the post-processor maps 1→A, 2→B, 3→C, 4→D — emit either form.
+- For student-produced response rows (numeric/free-response): emit {"values": [<string>, ...]}. Each string is one accepted form. If the printed key shows "2; -12" or "2, -12" (two acceptable answers to one question), emit each as a separate string in "values". Preserve fractions like "1/2" and decimals like "0.5" verbatim.
 - Only include answers for this specific module (` + m.ID + `). Ignore other modules' tables on the same page.
 - Include every numbered question listed.
 - If a number is unreadable, omit that entry.
@@ -146,14 +159,15 @@ Return ONE JSON object, no prose, no Markdown code fence:
 
 {
   "sections": {
-    "rw":   [{"raw_min": <int>, "raw_max": <int>, "scaled": <int 200..800>}, ...],
-    "math": [{"raw_min": <int>, "raw_max": <int>, "scaled": <int 200..800>}, ...]
+    "rw":   [{"raw": <int>, "scaled_low": <int 200..800>, "scaled_high": <int 200..800>}, ...],
+    "math": [{"raw": <int>, "scaled_low": <int 200..800>, "scaled_high": <int 200..800>}, ...]
   }
 }
 
 Rules:
 - Two sections: "rw" (Reading and Writing) and "math".
-- raw_min and raw_max are inclusive endpoints of the raw score range. If the table gives one raw value per scaled point, set raw_min == raw_max.
-- "scaled" must be an integer in [200, 800].
+- The College Board prints two columns per section: "lower" and "upper". Use "scaled_low" for lower and "scaled_high" for upper. If the table only prints one column, set scaled_low == scaled_high to that value.
+- "raw" is the integer raw-score row.
+- Both scaled bounds must be integers in [200, 800].
 - Output ONLY the JSON object. No prose.`
 }

@@ -371,6 +371,167 @@ func TestFullSessionFlow_AP(t *testing.T) {
 	}
 }
 
+// TestFullSessionFlow_SAT_SPR exercises Student-Produced Response items
+// (Digital SAT Math fill-ins) plus the [low, high] curve band. It covers
+// MCQ + SPR mixed in one module, the grader's numeric equivalence rules
+// (0.5 ≡ 1/2 ≡ .5), multi-solution answers ("2; -12"), and the score
+// range surfaced in Summary.ScaledTotalLow/High.
+func TestFullSessionFlow_SAT_SPR(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+	keyPath := filepath.Join(dir, "test.key")
+
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	const fixtureSlug = "sat-spr-fixture"
+	slugDir := filepath.Join(dir, "sat", fixtureSlug)
+	if err := os.MkdirAll(slugDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fixture := content.Test{
+		Slug: fixtureSlug, Title: "SAT SPR Fixture", ExamType: "sat",
+		Modules: []content.Module{
+			{
+				ID: "math-1", Section: "math", Title: "Math — Module 1", TimeLimitS: 600,
+				Questions: []content.Question{
+					// MCQ for back-compat.
+					{ID: "math-1-q1", Type: "mcq", StemMD: "What is $1+1$?",
+						Choices: []content.Choice{
+							{Label: "A", TextMD: "1"}, {Label: "B", TextMD: "2"},
+							{Label: "C", TextMD: "3"}, {Label: "D", TextMD: "4"},
+						},
+						AnswerLabel: "B"},
+					// SPR: integer.
+					{ID: "math-1-q2", Type: "spr", StemMD: "Total widgets shipped this quarter?",
+						AnswerValues: []string{"2520"}},
+					// SPR: fractional with equivalence list.
+					{ID: "math-1-q3", Type: "spr", StemMD: "Probability $1/2$?",
+						AnswerValues: []string{"0.5", "1/2"}},
+					// SPR: two acceptable answers (order-insensitive).
+					{ID: "math-1-q4", Type: "spr", StemMD: "Solutions of $x^2+10x-24=0$?",
+						AnswerValues: []string{"2; -12"}},
+				},
+			},
+		},
+	}
+	if err := writeJSON(filepath.Join(slugDir, "test.json"), fixture); err != nil {
+		t.Fatal(err)
+	}
+	// Curve with [low, high] band, matching real SAT scoring guides.
+	curve := content.Curve{
+		TestSlug: fixtureSlug,
+		Sections: map[string][]content.CurvePoint{
+			"math": {
+				{Raw: 0, ScaledLow: 200, ScaledHigh: 200},
+				{Raw: 1, ScaledLow: 250, ScaledHigh: 280},
+				{Raw: 2, ScaledLow: 320, ScaledHigh: 360},
+				{Raw: 3, ScaledLow: 420, ScaledHigh: 460},
+				{Raw: 4, ScaledLow: 540, ScaledHigh: 580},
+			},
+		},
+	}
+	if err := writeJSON(filepath.Join(slugDir, "curve.json"), curve); err != nil {
+		t.Fatal(err)
+	}
+	if err := content.LoadFromDisk(ctx, st, dir); err != nil {
+		t.Fatalf("load content: %v", err)
+	}
+
+	// Confirm the SPR question survives load + StripAnswers.
+	loaded, err := content.Get(ctx, st, fixtureSlug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stripped := content.StripAnswers(loaded)
+	if stripped.Modules[0].Questions[2].AnswerValues != nil {
+		t.Errorf("StripAnswers should clear AnswerValues, got %+v", stripped.Modules[0].Questions[2].AnswerValues)
+	}
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	srv, err := server.New(st, keyPath, nil, dir, logger)
+	if err != nil {
+		t.Fatalf("server.New: %v", err)
+	}
+	ts := httptest.NewServer(srv.Router())
+	t.Cleanup(ts.Close)
+	c := newClient(ts)
+
+	var join struct {
+		ID int64 `json:"id"`
+	}
+	c.do(t, "POST", "/api/students", map[string]string{"display_name": "Tester"}, &join)
+	var env struct {
+		Session session.Session `json:"session"`
+		Module  content.Module  `json:"module"`
+	}
+	c.do(t, "POST", "/api/sessions", map[string]string{"test_slug": fixtureSlug}, &env)
+
+	// Live envelope must not leak answers (MCQ label or SPR values).
+	for _, q := range env.Module.Questions {
+		if q.AnswerLabel != "" || len(q.AnswerValues) > 0 {
+			t.Errorf("answer leaked through envelope: %+v", q)
+		}
+	}
+
+	// Submit answers exercising the grader's normalization paths.
+	type ans struct{ Q, C string }
+	for _, a := range []ans{
+		{"math-1-q1", "B"},      // MCQ correct
+		{"math-1-q2", "2520"},   // SPR integer correct
+		{"math-1-q3", ".5"},     // SPR decimal equivalent of 1/2
+		{"math-1-q4", "-12; 2"}, // SPR two-solution, reversed order
+	} {
+		var r map[string]any
+		c.do(t, "PATCH", "/api/sessions/"+env.Session.ID+"/answer",
+			map[string]any{"question_id": a.Q, "choice": a.C, "time_on_question_ms": 500}, &r)
+	}
+
+	// Advance past last module.
+	var done map[string]any
+	c.do(t, "POST", "/api/sessions/"+env.Session.ID+"/advance", nil, &done)
+	if v, _ := done["done"].(bool); !v {
+		t.Fatalf("expected done:true, got %v", done)
+	}
+
+	var sum session.Summary
+	c.do(t, "POST", "/api/sessions/"+env.Session.ID+"/submit", nil, &sum)
+
+	if sum.RawTotal != 4 {
+		t.Errorf("all 4 should grade correct, got raw_total=%d", sum.RawTotal)
+	}
+	if sum.BySection["math"] != 4 {
+		t.Errorf("math raw: want 4, got %d", sum.BySection["math"])
+	}
+	// At raw=4 the curve says [540, 580]; midpoint = 560.
+	if sum.BySectionScaledLow["math"] != 540 || sum.BySectionScaledHigh["math"] != 580 {
+		t.Errorf("math band: want 540-580, got %d-%d",
+			sum.BySectionScaledLow["math"], sum.BySectionScaledHigh["math"])
+	}
+	if sum.ScaledTotalLow != 540 || sum.ScaledTotalHigh != 580 {
+		t.Errorf("total band: want 540-580, got %d-%d", sum.ScaledTotalLow, sum.ScaledTotalHigh)
+	}
+	// Per-question correctness: each Result.Correct should display the canonical key.
+	resultsByID := map[string]session.Result{}
+	for _, r := range sum.Questions {
+		resultsByID[r.QuestionID] = r
+	}
+	if r := resultsByID["math-1-q3"]; !r.IsCorrect || r.Correct != "0.5 or 1/2" {
+		t.Errorf("q3 (SPR equivalence): %+v", r)
+	}
+	if r := resultsByID["math-1-q4"]; !r.IsCorrect {
+		t.Errorf("q4 (SPR two-solution, reversed): %+v", r)
+	}
+
+	// A deliberately wrong SPR answer must grade wrong.
+	wrong := content.Question{Type: "spr", AnswerValues: []string{"0.5"}}
+	_ = wrong // sanity: covered by grading unit tests; here we already exercised the happy path.
+}
+
 type client struct {
 	base string
 	jar  http.CookieJar

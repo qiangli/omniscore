@@ -60,14 +60,14 @@ func TestSATAnswerKey_NumericFallback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if key[1] != "C" {
-		t.Errorf("q1: numeric 3 should map to C, got %q", key[1])
+	if key[1].Label != "C" {
+		t.Errorf("q1: numeric 3 should map to C, got %q", key[1].Label)
 	}
-	if key[2] != "A" {
-		t.Errorf("q2: letter A should round-trip, got %q", key[2])
+	if key[2].Label != "A" {
+		t.Errorf("q2: letter A should round-trip, got %q", key[2].Label)
 	}
-	if key[3] != "D" {
-		t.Errorf("q3: numeric 4 should map to D, got %q", key[3])
+	if key[3].Label != "D" {
+		t.Errorf("q3: numeric 4 should map to D, got %q", key[3].Label)
 	}
 }
 
