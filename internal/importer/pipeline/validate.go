@@ -1,27 +1,33 @@
-package importer
+package pipeline
 
 import (
 	"fmt"
 	"strings"
+
+	"github.com/qiangli/omniscore/internal/importer/profile"
 )
 
-// ValidateQuestion runs structural checks on one ExtractedQuestion. Returns
-// the set of issues found; an empty slice means the question is publishable.
-// Caller decides whether to treat any issue as fatal (block emit) or as a
-// review-log entry (proceed but flag).
-func ValidateQuestion(q ExtractedQuestion) []string {
+// ValidateQuestion runs structural checks on one ExtractedQuestion, scoped
+// to the profile's choice set. Returns the set of issues found; an empty
+// slice means the question is publishable. Caller decides whether to treat
+// any issue as fatal (block emit) or as a review-log entry (proceed but flag).
+func ValidateQuestion(prof profile.Profile, q ExtractedQuestion) []string {
 	var issues []string
 
 	if strings.TrimSpace(q.StemMD) == "" && !q.HasStemFigure {
 		issues = append(issues, "empty stem and no stem figure")
 	}
 
-	// Most AP MCQs use 5 choices; a few legacy years use 4. Accept either.
-	if n := len(q.Choices); n != 5 && n != 4 {
-		issues = append(issues, fmt.Sprintf("expected 4 or 5 choices, got %d", n))
+	expectedLabels := prof.ChoiceLabels
+	expectedMax := len(expectedLabels)
+
+	// Profiles that allow a smaller legacy choice count (AP Calc BC's 2014–2017
+	// 4-choice exams) flag this on Features. For now we accept exactly the
+	// profile's expected count, or one less (legacy fallback).
+	if n := len(q.Choices); n != expectedMax && n != expectedMax-1 {
+		issues = append(issues, fmt.Sprintf("expected %d choices, got %d", expectedMax, n))
 	}
 
-	expectedLabels := []string{"A", "B", "C", "D", "E"}
 	for i, c := range q.Choices {
 		if i >= len(expectedLabels) {
 			break
@@ -59,15 +65,12 @@ func ValidateQuestion(q ExtractedQuestion) []string {
 }
 
 // katexSanity runs cheap structural checks on inline KaTeX inside a markdown
-// fragment. It does NOT invoke a real KaTeX parser — that would require a
-// Node helper. Catches the most common LLM errors:
-//
+// fragment. Does NOT invoke a real KaTeX parser. Catches:
 //   - unbalanced $...$ delimiters
 //   - unbalanced { } or [ ] inside math regions
 //
 // Returns "" when nothing suspicious is detected.
 func katexSanity(s string) string {
-	// Count unescaped $ characters.
 	dollars := 0
 	for i := 0; i < len(s); i++ {
 		if s[i] == '$' && (i == 0 || s[i-1] != '\\') {
@@ -78,7 +81,6 @@ func katexSanity(s string) string {
 		return fmt.Sprintf("unbalanced $ delimiters (%d found)", dollars)
 	}
 
-	// Walk math regions and check brace/bracket balance.
 	inMath := false
 	braces, brackets := 0, 0
 	for i := 0; i < len(s); i++ {

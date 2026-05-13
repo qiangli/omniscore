@@ -1,3 +1,7 @@
+// Package importer holds the vendor-neutral entry points for building a
+// vision.Provider from a vendor/model string. The PDF → JSON pipeline itself
+// lives in internal/importer/pipeline; exam-specific knobs live in
+// internal/importer/profile.
 package importer
 
 import (

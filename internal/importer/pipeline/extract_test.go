@@ -1,4 +1,4 @@
-package importer_test
+package pipeline_test
 
 import (
 	"context"
@@ -10,7 +10,8 @@ import (
 	"testing"
 
 	"github.com/qiangli/omniscore/internal/content"
-	"github.com/qiangli/omniscore/internal/importer"
+	"github.com/qiangli/omniscore/internal/importer/pipeline"
+	"github.com/qiangli/omniscore/internal/importer/profile"
 	"github.com/qiangli/omniscore/internal/importer/vision"
 )
 
@@ -31,7 +32,6 @@ func (s *scriptedProvider) Generate(_ context.Context, _ vision.Request) (string
 	return out, nil
 }
 
-// writePagePNG plants a tiny stand-in PNG so ExtractPage can read it.
 func writePagePNG(t *testing.T, dir, name string) string {
 	t.Helper()
 	p := filepath.Join(dir, name)
@@ -39,6 +39,13 @@ func writePagePNG(t *testing.T, dir, name string) string {
 		t.Fatal(err)
 	}
 	return p
+}
+
+func apMCQModule() profile.ModuleSpec {
+	for _, m := range profile.AP().Modules {
+		return m
+	}
+	panic("AP profile has no modules")
 }
 
 func TestExtractPage_HappyPath(t *testing.T) {
@@ -59,7 +66,7 @@ func TestExtractPage_HappyPath(t *testing.T) {
 	}]}`
 	p := &scriptedProvider{responses: []string{canned, canned, canned}}
 
-	qs, err := importer.ExtractPage(context.Background(), p, page, 3)
+	qs, err := pipeline.ExtractPage(context.Background(), p, profile.AP(), apMCQModule(), page, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +88,6 @@ func TestExtractPage_DisagreementFlagsForReview(t *testing.T) {
 	dir := t.TempDir()
 	page := writePagePNG(t, dir, "page-001.png")
 
-	// Two rounds say 5 choices, one round drops to 4 — should flag.
 	five := `{"questions":[{"question_number":1,"stem_md":"x","has_stem_figure":false,"choices":[
 		{"label":"A","text_md":"a","has_figure":false},
 		{"label":"B","text_md":"b","has_figure":false},
@@ -97,7 +103,7 @@ func TestExtractPage_DisagreementFlagsForReview(t *testing.T) {
 	]}]}`
 	p := &scriptedProvider{responses: []string{five, five, four}}
 
-	qs, err := importer.ExtractPage(context.Background(), p, page, 3)
+	qs, err := pipeline.ExtractPage(context.Background(), p, profile.AP(), apMCQModule(), page, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +122,7 @@ func TestExtractPage_AllUnparsedReturnsReviewEntry(t *testing.T) {
 	garbage := "I'm sorry, I can't extract that page."
 	p := &scriptedProvider{responses: []string{garbage, garbage, garbage}}
 
-	qs, err := importer.ExtractPage(context.Background(), p, page, 3)
+	qs, err := pipeline.ExtractPage(context.Background(), p, profile.AP(), apMCQModule(), page, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,14 +132,14 @@ func TestExtractPage_AllUnparsedReturnsReviewEntry(t *testing.T) {
 }
 
 func TestReconcileAnswers(t *testing.T) {
-	qs := []importer.ExtractedQuestion{
+	qs := []pipeline.ExtractedQuestion{
 		{QuestionNumber: 1, AnswerLabel: ""},
-		{QuestionNumber: 2, AnswerLabel: "A"},      // matches key
-		{QuestionNumber: 3, AnswerLabel: "B"},      // disagrees with key
-		{QuestionNumber: 4, AnswerLabel: ""},      // missing from key
+		{QuestionNumber: 2, AnswerLabel: "A"},
+		{QuestionNumber: 3, AnswerLabel: "B"},
+		{QuestionNumber: 4, AnswerLabel: ""},
 	}
 	key := map[int]string{1: "C", 2: "A", 3: "D"}
-	out := importer.ReconcileAnswers(qs, key)
+	out := pipeline.ReconcileAnswers(qs, key)
 
 	if out[0].AnswerLabel != "C" {
 		t.Errorf("q1: want C from key, got %q", out[0].AnswerLabel)
@@ -151,13 +157,11 @@ func TestReconcileAnswers(t *testing.T) {
 
 func TestEmit_RoundTripWithRuntimeLoader(t *testing.T) {
 	// Emit a minimal AP test with the importer, then load it back through the
-	// runtime content loader. This is the contract Phase 4 must satisfy:
-	// importer output is read identically to a hand-authored fixture.
+	// runtime content loader.
 	dir := t.TempDir()
 	outRoot := filepath.Join(dir, "ap")
 	workdir := filepath.Join(dir, "workdir")
 
-	// Plant a fake page PNG so figure copy succeeds.
 	pageDir := filepath.Join(workdir, "pages")
 	if err := os.MkdirAll(pageDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -167,7 +171,8 @@ func TestEmit_RoundTripWithRuntimeLoader(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	in := importer.EmitInput{
+	in := pipeline.EmitInput{
+		Profile: profile.AP(),
 		Slug:    "ap-emit-test",
 		Title:   "Emitter Round-Trip Test",
 		OutRoot: outRoot,
@@ -178,15 +183,15 @@ func TestEmit_RoundTripWithRuntimeLoader(t *testing.T) {
 				"mcq_total": {{Raw: 0, Scaled: 1}, {Raw: 30, Scaled: 5}},
 			},
 		},
-		Modules: []importer.EmitModule{
+		Modules: []pipeline.EmitModule{
 			{
 				ID: "mcq-no-calc", Section: "mcq_no_calc",
 				Title: "Section I, Part A — No calculator", TimeLimitS: 600,
-				Questions: []importer.ExtractedQuestion{
+				Questions: []pipeline.ExtractedQuestion{
 					{
 						PageSource: pagePNG, QuestionNumber: 1,
 						StemMD: "$f'(2)$ if $f(x)=x^3-3x$?",
-						Choices: []importer.ExtractedChoice{
+						Choices: []pipeline.ExtractedChoice{
 							{Label: "A", TextMD: "$3$"}, {Label: "B", TextMD: "$6$"},
 							{Label: "C", TextMD: "$9$"}, {Label: "D", TextMD: "$12$"},
 							{Label: "E", TextMD: "$15$"},
@@ -197,7 +202,7 @@ func TestEmit_RoundTripWithRuntimeLoader(t *testing.T) {
 						PageSource: pagePNG, QuestionNumber: 2,
 						StemMD: "Pick the slope field for $dy/dx = y$",
 						HasStemFigure: true,
-						Choices: []importer.ExtractedChoice{
+						Choices: []pipeline.ExtractedChoice{
 							{Label: "A", TextMD: "", HasFigure: true},
 							{Label: "B", TextMD: "", HasFigure: true},
 							{Label: "C", TextMD: "", HasFigure: true},
@@ -210,7 +215,7 @@ func TestEmit_RoundTripWithRuntimeLoader(t *testing.T) {
 			},
 		},
 	}
-	written, flagged, err := importer.Emit(in)
+	written, flagged, err := pipeline.Emit(in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +226,6 @@ func TestEmit_RoundTripWithRuntimeLoader(t *testing.T) {
 		t.Errorf("flagged: want 0, got %d", flagged)
 	}
 
-	// Load back via the runtime loader and confirm shape + figure URL rewrite.
 	raw, err := os.ReadFile(filepath.Join(outRoot, "tests", "ap-emit-test.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -246,7 +250,6 @@ func TestEmit_RoundTripWithRuntimeLoader(t *testing.T) {
 		}
 	}
 
-	// Confirm the figure files actually exist on disk.
 	figDir := filepath.Join(outRoot, "figures", "ap-emit-test")
 	for _, name := range []string{"q2-stem.png", "q2-a.png", "q2-b.png", "q2-c.png", "q2-d.png", "q2-e.png"} {
 		if _, err := os.Stat(filepath.Join(figDir, name)); err != nil {
@@ -254,7 +257,6 @@ func TestEmit_RoundTripWithRuntimeLoader(t *testing.T) {
 		}
 	}
 
-	// Review log should exist (even if empty of issues).
 	if _, err := os.Stat(filepath.Join(workdir, ".review", "ap-emit-test.md")); err != nil {
 		t.Errorf("review log missing: %v", err)
 	}

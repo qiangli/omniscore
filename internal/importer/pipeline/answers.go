@@ -1,4 +1,4 @@
-package importer
+package pipeline
 
 import (
 	"context"
@@ -7,26 +7,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/qiangli/omniscore/internal/importer/profile"
 	"github.com/qiangli/omniscore/internal/importer/vision"
 )
-
-const answerKeyPrompt = `You are looking at the multiple-choice answer key page of an AP Calculus BC released exam.
-
-Return ONE JSON object, no prose, no Markdown code fence:
-
-{
-  "answers": [
-    {"question_number": 1, "label": "A"},
-    {"question_number": 2, "label": "C"},
-    ...
-  ]
-}
-
-Rules:
-- "label" must be one of A, B, C, D, E.
-- Include every numbered question listed on the page.
-- If a number is unreadable, omit that entry.
-- Output ONLY the JSON object. No prose.`
 
 type answerKeyResp struct {
 	Answers []struct {
@@ -35,11 +18,21 @@ type answerKeyResp struct {
 	} `json:"answers"`
 }
 
-// ExtractAnswerKey runs the answer-key prompt against every classified
-// answer-key page and returns the merged map[questionNumber]label. If two
-// pages disagree on a question (rare — answer keys are usually one page)
-// the later page wins.
-func ExtractAnswerKey(ctx context.Context, p vision.Provider, pagePaths []string) (map[int]string, error) {
+// ExtractAnswerKey runs the profile's answer-key prompt against every
+// classified answer-key page and returns a flat map[questionNumber]label.
+// When the same question shows up on multiple pages (rare — keys are usually
+// one page) the later page wins.
+//
+// For exams that print keys per module (profile.Features.PerModuleAnswerKey)
+// the caller should split pagePaths by module first and call this function
+// once per module.
+func ExtractAnswerKey(ctx context.Context, p vision.Provider, prof profile.Profile, mod profile.ModuleSpec, pagePaths []string) (map[int]string, error) {
+	prompt := prof.Prompts.AnswerKey(prof, mod)
+	valid := map[string]bool{}
+	for _, l := range prof.ChoiceLabels {
+		valid[l] = true
+	}
+
 	out := map[int]string{}
 	for _, page := range pagePaths {
 		img, err := os.ReadFile(page)
@@ -48,7 +41,7 @@ func ExtractAnswerKey(ctx context.Context, p vision.Provider, pagePaths []string
 		}
 		raw, err := p.Generate(ctx, vision.Request{
 			Image:       img,
-			Prompt:      answerKeyPrompt,
+			Prompt:      prompt,
 			Temperature: 0.0,
 		})
 		if err != nil {
@@ -56,18 +49,45 @@ func ExtractAnswerKey(ctx context.Context, p vision.Provider, pagePaths []string
 		}
 		parsed, perr := parseAnswerKey(raw)
 		if perr != nil {
-			// One bad page shouldn't kill the whole import; skip and let the
-			// review log flag it.
 			continue
 		}
 		for _, a := range parsed {
-			label := strings.ToUpper(strings.TrimSpace(a.Label))
-			if len(label) == 1 && label[0] >= 'A' && label[0] <= 'E' {
+			label := normalizeAnswerLabel(a.Label, prof.ChoiceLabels)
+			if valid[label] {
 				out[a.QuestionNumber] = label
 			}
 		}
 	}
 	return out, nil
+}
+
+// normalizeAnswerLabel accepts either a letter ("A", "b") or a 1-based index
+// ("1", "2", "3", "4") and returns the canonical uppercase letter when it
+// maps to a known choice slot. Empty string for anything unrecognized.
+func normalizeAnswerLabel(raw string, labels []string) string {
+	s := strings.ToUpper(strings.TrimSpace(raw))
+	if s == "" {
+		return ""
+	}
+	for _, l := range labels {
+		if s == l {
+			return l
+		}
+	}
+	// Numeric fallback: "1" → labels[0] etc.
+	if len(s) <= 2 {
+		n := 0
+		for _, r := range s {
+			if r < '0' || r > '9' {
+				return ""
+			}
+			n = n*10 + int(r-'0')
+		}
+		if n >= 1 && n <= len(labels) {
+			return labels[n-1]
+		}
+	}
+	return ""
 }
 
 func parseAnswerKey(raw string) ([]struct {
@@ -87,8 +107,8 @@ func parseAnswerKey(raw string) ([]struct {
 }
 
 // ReconcileAnswers fills in AnswerLabel on each ExtractedQuestion from key.
-// Discrepancies (LLM said A, key says B) are noted in ReviewNotes and the
-// key wins. Questions missing from the key get NeedsReview=true.
+// LLM-vs-key disagreements are noted in ReviewNotes and the key wins.
+// Questions missing from the key get NeedsReview=true.
 func ReconcileAnswers(qs []ExtractedQuestion, key map[int]string) []ExtractedQuestion {
 	out := make([]ExtractedQuestion, len(qs))
 	for i, q := range qs {

@@ -1,4 +1,4 @@
-package importer
+package pipeline
 
 import (
 	"encoding/json"
@@ -11,29 +11,28 @@ import (
 	"time"
 
 	"github.com/qiangli/omniscore/internal/content"
+	"github.com/qiangli/omniscore/internal/importer/profile"
 )
 
-// EmitInput bundles everything needed to assemble a published Test JSON +
-// curve + figures + review log. modulePages tells us which extracted
-// questions belong to which module (mcq_no_calc vs mcq_calc).
+// EmitInput bundles everything Emit needs to assemble a published Test JSON +
+// curve + figures + review log.
 type EmitInput struct {
+	Profile profile.Profile
 	Slug    string
 	Title   string
 	OutRoot string // e.g. data/omni-data/ap
 	Workdir string // e.g. .import-cache/<slug>; review log lives here
 
-	// Per-module: section code → time limit (seconds) → ordered ExtractedQuestions.
 	Modules []EmitModule
-
-	Curve content.Curve
+	Curve   content.Curve
 }
 
 // EmitModule is one timed section's worth of questions plus its presentation
 // metadata. Caller groups questions by classified PageClass before calling.
 type EmitModule struct {
 	ID         string
-	Section    string // e.g. "mcq_no_calc"
-	Title      string // e.g. "Section I, Part A — No calculator"
+	Section    string
+	Title      string
 	TimeLimitS int
 	Questions  []ExtractedQuestion
 }
@@ -45,15 +44,16 @@ type EmitModule struct {
 //
 //	<OutRoot>/tests/<slug>.json
 //	<OutRoot>/curves/<slug>.json
-//	<OutRoot>/figures/<slug>/qNN-stem.png   (whole-page fallback)
+//	<OutRoot>/figures/<slug>/qNN-stem.png
 //	<Workdir>/.review/<slug>.md
 //
 // Returns the count of questions written and the count flagged for review.
 func Emit(in EmitInput) (written, flagged int, err error) {
+	figuresDir := filepath.Join(in.OutRoot, "figures", in.Slug)
 	for _, dir := range []string{
 		filepath.Join(in.OutRoot, "tests"),
 		filepath.Join(in.OutRoot, "curves"),
-		filepath.Join(in.OutRoot, "figures", in.Slug),
+		figuresDir,
 		filepath.Join(in.Workdir, ".review"),
 	} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -64,8 +64,8 @@ func Emit(in EmitInput) (written, flagged int, err error) {
 	t := content.Test{
 		Slug:     in.Slug,
 		Title:    in.Title,
-		ExamType: "ap",
-		Subject:  "calc_bc",
+		ExamType: in.Profile.ExamType,
+		Subject:  in.Profile.Subject,
 	}
 
 	type flaggedEntry struct {
@@ -87,12 +87,12 @@ func Emit(in EmitInput) (written, flagged int, err error) {
 			cq := content.Question{
 				ID:          fmt.Sprintf("%s-q%d", m.Section, q.QuestionNumber),
 				StemMD:      q.StemMD,
+				PassageMD:   q.PassageMD,
 				AnswerLabel: q.AnswerLabel,
 			}
 			if q.HasStemFigure {
 				figName := fmt.Sprintf("q%d-stem.png", q.QuestionNumber)
-				if err := copyFigure(q.PageSource,
-					filepath.Join(in.OutRoot, "figures", in.Slug, figName)); err != nil {
+				if err := copyFigure(q.PageSource, filepath.Join(figuresDir, figName)); err != nil {
 					return written, flagged, fmt.Errorf("emit: copy figure for q%d: %w", q.QuestionNumber, err)
 				}
 				cq.StemFigure = &content.Figure{
@@ -100,15 +100,21 @@ func Emit(in EmitInput) (written, flagged int, err error) {
 					Alt: fmt.Sprintf("Figure for question %d", q.QuestionNumber),
 				}
 			}
+			if q.HasPassageFigure {
+				figName := fmt.Sprintf("q%d-passage.png", q.QuestionNumber)
+				if err := copyFigure(q.PageSource, filepath.Join(figuresDir, figName)); err != nil {
+					return written, flagged, fmt.Errorf("emit: copy passage figure for q%d: %w", q.QuestionNumber, err)
+				}
+				cq.PassageFigure = &content.Figure{
+					Src: "figures/" + figName,
+					Alt: fmt.Sprintf("Passage figure for question %d", q.QuestionNumber),
+				}
+			}
 			for _, c := range q.Choices {
 				cc := content.Choice{Label: c.Label, TextMD: c.TextMD}
 				if c.HasFigure {
-					// Choice-level figures: stash a per-choice page-source PNG. The
-					// importer emits one figure per (question, choice-letter) so the
-					// human reviewer can later re-crop with bbox precision.
 					figName := fmt.Sprintf("q%d-%s.png", q.QuestionNumber, strings.ToLower(c.Label))
-					if err := copyFigure(q.PageSource,
-						filepath.Join(in.OutRoot, "figures", in.Slug, figName)); err != nil {
+					if err := copyFigure(q.PageSource, filepath.Join(figuresDir, figName)); err != nil {
 						return written, flagged, fmt.Errorf("emit: copy figure for q%d %s: %w",
 							q.QuestionNumber, c.Label, err)
 					}
@@ -122,7 +128,7 @@ func Emit(in EmitInput) (written, flagged int, err error) {
 			mod.Questions = append(mod.Questions, cq)
 			written++
 
-			issues := ValidateQuestion(q)
+			issues := ValidateQuestion(in.Profile, q)
 			if len(issues) > 0 || q.NeedsReview {
 				flagged++
 				review = append(review, flaggedEntry{
@@ -143,7 +149,6 @@ func Emit(in EmitInput) (written, flagged int, err error) {
 		return written, flagged, err
 	}
 
-	// Stable order for the review log.
 	sort.Slice(review, func(i, j int) bool {
 		if review[i].Section != review[j].Section {
 			return review[i].Section < review[j].Section
