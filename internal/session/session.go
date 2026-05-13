@@ -217,20 +217,20 @@ type Result struct {
 // collapses to low == high == midpoint; for real SAT curves the band
 // matches the printed "your score is between X and Y" wording.
 type Summary struct {
-	SessionID             string         `json:"session_id"`
-	TestSlug              string         `json:"test_slug"`
-	ExamType              string         `json:"exam_type,omitempty"`
-	Subject               string         `json:"subject,omitempty"`
-	State                 State          `json:"state"`
-	RawTotal              int            `json:"raw_total"`
-	ScaledTotal           int            `json:"scaled_total"`
-	ScaledTotalLow        int            `json:"scaled_total_low,omitempty"`
-	ScaledTotalHigh       int            `json:"scaled_total_high,omitempty"`
-	BySection             map[string]int `json:"by_section_raw"`
-	BySectionScaled       map[string]int `json:"by_section_scaled"`
-	BySectionScaledLow    map[string]int `json:"by_section_scaled_low,omitempty"`
-	BySectionScaledHigh   map[string]int `json:"by_section_scaled_high,omitempty"`
-	Questions             []Result       `json:"questions"`
+	SessionID           string         `json:"session_id"`
+	TestSlug            string         `json:"test_slug"`
+	ExamType            string         `json:"exam_type,omitempty"`
+	Subject             string         `json:"subject,omitempty"`
+	State               State          `json:"state"`
+	RawTotal            int            `json:"raw_total"`
+	ScaledTotal         int            `json:"scaled_total"`
+	ScaledTotalLow      int            `json:"scaled_total_low,omitempty"`
+	ScaledTotalHigh     int            `json:"scaled_total_high,omitempty"`
+	BySection           map[string]int `json:"by_section_raw"`
+	BySectionScaled     map[string]int `json:"by_section_scaled"`
+	BySectionScaledLow  map[string]int `json:"by_section_scaled_low,omitempty"`
+	BySectionScaledHigh map[string]int `json:"by_section_scaled_high,omitempty"`
+	Questions           []Result       `json:"questions"`
 }
 
 // Submit tallies the session and stores raw + scaled totals.

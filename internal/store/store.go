@@ -104,20 +104,55 @@ func (s *Store) migrate(ctx context.Context) error {
 		if applied[m.v] {
 			continue
 		}
+		// SQLite's recommended pattern for migrations that rebuild tables
+		// (DROP + CREATE same name) is to disable FK enforcement *outside*
+		// the transaction, run the migration, verify integrity, then
+		// re-enable. PRAGMA foreign_keys inside a transaction is silently
+		// ignored, so the migration files can't toggle it themselves.
+		if _, err := s.DB.ExecContext(ctx, `PRAGMA foreign_keys = OFF`); err != nil {
+			return fmt.Errorf("disable FK before %s: %w", m.f, err)
+		}
 		tx, err := s.DB.BeginTx(ctx, nil)
 		if err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, m.sql); err != nil {
 			_ = tx.Rollback()
+			_, _ = s.DB.ExecContext(ctx, `PRAGMA foreign_keys = ON`)
 			return fmt.Errorf("apply %s: %w", m.f, err)
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)`, m.v, time.Now().UnixMilli()); err != nil {
 			_ = tx.Rollback()
+			_, _ = s.DB.ExecContext(ctx, `PRAGMA foreign_keys = ON`)
 			return err
 		}
 		if err := tx.Commit(); err != nil {
+			_, _ = s.DB.ExecContext(ctx, `PRAGMA foreign_keys = ON`)
 			return err
+		}
+		// Post-commit: verify FK integrity and turn enforcement back on.
+		rows, ferr := s.DB.QueryContext(ctx, `PRAGMA foreign_key_check`)
+		if ferr != nil {
+			return fmt.Errorf("foreign_key_check after %s: %w", m.f, ferr)
+		}
+		var violations []string
+		for rows.Next() {
+			var table string
+			var rowid sql.NullInt64
+			var parent string
+			var fkid sql.NullInt64
+			if err := rows.Scan(&table, &rowid, &parent, &fkid); err != nil {
+				_ = rows.Close()
+				return err
+			}
+			violations = append(violations, fmt.Sprintf("%s -> %s", table, parent))
+		}
+		_ = rows.Close()
+		if len(violations) > 0 {
+			return fmt.Errorf("FK violations after %s: %v", m.f, violations)
+		}
+		if _, err := s.DB.ExecContext(ctx, `PRAGMA foreign_keys = ON`); err != nil {
+			return fmt.Errorf("re-enable FK after %s: %w", m.f, err)
 		}
 	}
 	return nil

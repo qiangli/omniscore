@@ -42,21 +42,21 @@ func New(model, apiKey string) *Provider {
 func (p *Provider) Name() string { return "openai:" + p.Model }
 
 type chatReq struct {
-	Model       string         `json:"model"`
-	MaxTokens   int            `json:"max_tokens"`
-	Temperature float64        `json:"temperature"`
-	Messages    []chatMessage  `json:"messages"`
+	Model       string        `json:"model"`
+	MaxTokens   int           `json:"max_tokens"`
+	Temperature float64       `json:"temperature"`
+	Messages    []chatMessage `json:"messages"`
 }
 
 type chatMessage struct {
-	Role    string         `json:"role"`
-	Content []contentPart  `json:"content"`
+	Role    string        `json:"role"`
+	Content []contentPart `json:"content"`
 }
 
 type contentPart struct {
-	Type     string         `json:"type"`
-	Text     string         `json:"text,omitempty"`
-	ImageURL *imageURLPart  `json:"image_url,omitempty"`
+	Type     string        `json:"type"`
+	Text     string        `json:"text,omitempty"`
+	ImageURL *imageURLPart `json:"image_url,omitempty"`
 }
 
 type imageURLPart struct {

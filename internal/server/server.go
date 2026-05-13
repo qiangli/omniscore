@@ -24,7 +24,7 @@ import (
 type Server struct {
 	Store       *store.Store
 	Cookies     *cookieSigner
-	Static      fs.FS // embedded frontend; may be nil during early bootstrap
+	Static      fs.FS  // embedded frontend; may be nil during early bootstrap
 	FiguresRoot string // contentRoot — base for per-exam <exam>/figures/ trees
 	Logger      *slog.Logger
 }

@@ -61,9 +61,9 @@ type messageEntry struct {
 }
 
 type contentBlock struct {
-	Type   string         `json:"type"`
-	Text   string         `json:"text,omitempty"`
-	Source *imageSource   `json:"source,omitempty"`
+	Type   string       `json:"type"`
+	Text   string       `json:"text,omitempty"`
+	Source *imageSource `json:"source,omitempty"`
 }
 
 type imageSource struct {

@@ -204,7 +204,7 @@ func TestEmit_RoundTripWithRuntimeLoader(t *testing.T) {
 					},
 					{
 						PageSource: pagePNG, QuestionNumber: 2,
-						StemMD: "Pick the slope field for $dy/dx = y$",
+						StemMD:        "Pick the slope field for $dy/dx = y$",
 						HasStemFigure: true,
 						Choices: []pipeline.ExtractedChoice{
 							{Label: "A", TextMD: "", HasFigure: true},

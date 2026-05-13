@@ -3,13 +3,14 @@
 -- Two changes:
 --   1. Drop the `exam_type` CHECK constraint on test_templates so future
 --      exams (act, psat, gre, …) can be loaded without a schema bump.
---      SQLite can't ALTER CHECK in place, so we rebuild the table.
+--      SQLite can't ALTER CHECK in place, so we rebuild the table. The
+--      migration runner (internal/store/store.go) disables FK enforcement
+--      around each migration and runs `PRAGMA foreign_key_check` on
+--      commit — see that file for the SQLite 12-step pattern.
 --   2. Add nullable scaled_score_low / scaled_score_high columns on
 --      test_scoring_curves to capture SAT's lower/upper score bands.
 --      Legacy rows leave the new columns NULL; new SAT rows populate all
 --      three (scaled_score holds the midpoint for back-compat).
-
-PRAGMA foreign_keys = OFF;
 
 CREATE TABLE test_templates_new (
   slug              TEXT PRIMARY KEY,
@@ -27,5 +28,3 @@ ALTER TABLE test_templates_new RENAME TO test_templates;
 
 ALTER TABLE test_scoring_curves ADD COLUMN scaled_score_low INTEGER;
 ALTER TABLE test_scoring_curves ADD COLUMN scaled_score_high INTEGER;
-
-PRAGMA foreign_keys = ON;

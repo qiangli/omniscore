@@ -25,16 +25,16 @@ const schemaVersion = 2
 // bytes. We use basename rather than absolute path so the cache survives
 // moving the raw PDFs between checkouts.
 type ImportManifest struct {
-	SchemaVersion int                       `json:"schema_version"`
-	ExamType      string                    `json:"exam_type"`
-	Slug          string                    `json:"slug"`
-	Title         string                    `json:"title"`
-	Inputs        map[string]ManifestInput  `json:"inputs"`
-	Fingerprint   string                    `json:"fingerprint,omitempty"` // free-form: caller's choice (typically the model spec)
-	DPIClassify   int                       `json:"dpi_classify"`
-	DPIExtract    int                       `json:"dpi_extract"`
-	ConsistencyN  int                       `json:"consistency_n"`
-	CompletedAtMS int64                     `json:"completed_at_ms"`
+	SchemaVersion int                      `json:"schema_version"`
+	ExamType      string                   `json:"exam_type"`
+	Slug          string                   `json:"slug"`
+	Title         string                   `json:"title"`
+	Inputs        map[string]ManifestInput `json:"inputs"`
+	Fingerprint   string                   `json:"fingerprint,omitempty"` // free-form: caller's choice (typically the model spec)
+	DPIClassify   int                      `json:"dpi_classify"`
+	DPIExtract    int                      `json:"dpi_extract"`
+	ConsistencyN  int                      `json:"consistency_n"`
+	CompletedAtMS int64                    `json:"completed_at_ms"`
 }
 
 // ManifestInput is one source PDF's identifier — basename plus content hash.

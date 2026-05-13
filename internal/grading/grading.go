@@ -30,9 +30,9 @@ type Grader interface {
 }
 
 var registry = map[string]Grader{
-	"":                          mcqGrader{},
-	content.QuestionTypeMCQ:     mcqGrader{},
-	content.QuestionTypeSPR:     sprGrader{},
+	"":                      mcqGrader{},
+	content.QuestionTypeMCQ: mcqGrader{},
+	content.QuestionTypeSPR: sprGrader{},
 }
 
 // Register installs a Grader for a Question.Type. Calling Register from a
