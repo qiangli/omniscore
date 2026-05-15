@@ -9,7 +9,7 @@ PKG ?= ./cmd/omniscore
 LDFLAGS ?= -s -w
 BUILD_TAGS ?= netgo,osusergo
 
-.PHONY: help all tidy fmt vet build frontend backend test go-test fe-lint install clean dev start stop status release ap-import sat-import
+.PHONY: help all tidy fmt vet build frontend backend test go-test fe-lint install clean dev start stop status release ap-import sat-import sat-pdf-eval
 
 # Background-server tracking. `start` writes the pid + log here so `stop` and
 # `status` can find a running instance without polling for ports.
@@ -67,6 +67,10 @@ ap-import: ## Build the AP PDF→JSON importer (separate binary; needs pdftoppm 
 sat-import: ## Build the SAT PDF→JSON importer (separate binary; needs pdftoppm + a vision LLM at run time)
 	mkdir -p bin
 	$(GO) build -o bin/sat-import ./cmd/sat-import
+
+sat-pdf-eval: ## Build the PDF-extraction eval tool (compares pure-Go / shell-out extractors against the LLM-extracted JSON)
+	mkdir -p bin
+	$(GO) build -o bin/sat-pdf-eval ./cmd/sat-pdf-eval
 
 dev: frontend backend ## Build then run the server in the foreground (Ctrl-C to stop)
 	./$(BIN)
