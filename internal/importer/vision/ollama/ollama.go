@@ -22,11 +22,13 @@ import (
 type Provider struct {
 	Host    string        // e.g. "http://localhost:11434"
 	Model   string        // e.g. "llama3.2-vision:90b"
-	Timeout time.Duration // per-call HTTP timeout (0 = use 90s default)
+	Timeout time.Duration // per-call HTTP timeout (0 = use 5min default)
 	hc      *http.Client
 }
 
-// New constructs a Provider with sensible defaults.
+// New constructs a Provider with sensible defaults. The 5-minute timeout
+// accommodates cold-load + image-encoder overhead for ~30B vision models on
+// Apple Silicon; a 90s default was tight enough to time out every call.
 func New(host, model string) *Provider {
 	if host == "" {
 		host = "http://localhost:11434"
@@ -35,20 +37,24 @@ func New(host, model string) *Provider {
 	return &Provider{
 		Host:    host,
 		Model:   model,
-		Timeout: 90 * time.Second,
-		hc:      &http.Client{Timeout: 90 * time.Second},
+		Timeout: 5 * time.Minute,
+		hc:      &http.Client{Timeout: 5 * time.Minute},
 	}
 }
 
 func (p *Provider) Name() string { return "ollama:" + p.Model }
 
 // generateReq mirrors Ollama's /api/generate body for image inputs. Stream is
-// disabled so we can read one JSON response.
+// disabled so we can read one JSON response. Think is forced off for Qwen3-VL
+// and other reasoning models: structured page extraction does not benefit from
+// chain-of-thought, and the extra tokens cause 5-min HTTP timeouts on hard
+// pages. Non-reasoning models ignore the field.
 type generateReq struct {
 	Model   string   `json:"model"`
 	Prompt  string   `json:"prompt"`
 	Images  []string `json:"images,omitempty"` // base64-encoded image bytes
 	Stream  bool     `json:"stream"`
+	Think   bool     `json:"think"`
 	Options struct {
 		Temperature float64 `json:"temperature"`
 	} `json:"options"`
