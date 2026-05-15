@@ -87,6 +87,7 @@ start: build ## Build then launch the server in the background against $(CONTENT
 	@sleep 1
 	@if kill -0 `cat $(PID_FILE)` 2>/dev/null; then \
 		echo "omniscore started: pid=$$(cat $(PID_FILE)) bind=$(BIND) content=$(CONTENT_DIR)"; \
+		grep -E '^  (Landing page|Admin login):' $(LOG_FILE) || true; \
 		echo "  log:  $(LOG_FILE)"; \
 		echo "  stop: make stop"; \
 	else \
@@ -109,6 +110,7 @@ stop: ## Stop the background server started by `make start`
 status: ## Report whether the background server is running
 	@if [ -f $(PID_FILE) ] && kill -0 `cat $(PID_FILE)` 2>/dev/null; then \
 		echo "omniscore running: pid=$$(cat $(PID_FILE))"; \
+		grep -E '^  (Landing page|Admin login):' $(LOG_FILE) 2>/dev/null || true; \
 		echo "  log: $(LOG_FILE)"; \
 	else \
 		echo "omniscore not running"; \
