@@ -13,6 +13,7 @@ frontend/node_modules/
 *.db-wal
 *.db-shm
 omniscore.key
+omniscore.admin-key
 
 # Sibling content repo + raw PDF source dirs are kept out of the omniscore repo entirely.
 # Anchored with leading slash so we don't accidentally ignore tests/data/.
