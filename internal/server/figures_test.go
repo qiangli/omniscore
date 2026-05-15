@@ -41,7 +41,7 @@ func TestServeFigure(t *testing.T) {
 	}
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	srv, err := server.New(s, keyPath, nil, dir, logger)
+	srv, err := server.New(s, keyPath, nil, dir, nil, logger)
 	if err != nil {
 		t.Fatalf("server.New: %v", err)
 	}

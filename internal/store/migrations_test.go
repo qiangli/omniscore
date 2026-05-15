@@ -21,6 +21,7 @@ func TestMigrationFilesIdentical(t *testing.T) {
 	pairs := [][2]string{
 		{"migrations/0001_init.sql", "../../migrations/0001_init.sql"},
 		{"migrations/0002_extensible_types.sql", "../../migrations/0002_extensible_types.sql"},
+		{"migrations/0003_review_workflow.sql", "../../migrations/0003_review_workflow.sql"},
 	}
 	for _, p := range pairs {
 		a, err := os.ReadFile(p[0])
@@ -101,8 +102,8 @@ func TestMigrationUpgradeFromV1(t *testing.T) {
 		}
 		versions = append(versions, v)
 	}
-	if len(versions) != 2 || versions[0] != 1 || versions[1] != 2 {
-		t.Fatalf("schema_migrations: want [1, 2], got %v", versions)
+	if len(versions) != 3 || versions[0] != 1 || versions[1] != 2 || versions[2] != 3 {
+		t.Fatalf("schema_migrations: want [1, 2, 3], got %v", versions)
 	}
 
 	// FK referential integrity must survive the table rebuild.

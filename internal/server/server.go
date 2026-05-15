@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/qiangli/omniscore/internal/admin"
 	"github.com/qiangli/omniscore/internal/content"
 	"github.com/qiangli/omniscore/internal/session"
 	"github.com/qiangli/omniscore/internal/store"
@@ -24,20 +25,22 @@ import (
 type Server struct {
 	Store       *store.Store
 	Cookies     *cookieSigner
-	Static      fs.FS  // embedded frontend; may be nil during early bootstrap
-	FiguresRoot string // contentRoot — base for per-exam <exam>/figures/ trees
+	Static      fs.FS       // embedded frontend; may be nil during early bootstrap
+	FiguresRoot string      // contentRoot — base for per-exam <exam>/figures/ trees
+	Admin       *admin.Auth // optional; when non-nil mounts /api/admin/*
 	Logger      *slog.Logger
 }
 
 // New builds a Server with a HMAC cookie key persisted at keyPath. figuresRoot
 // is the same path passed as -content; it lets the static handler at
-// /api/figures/<exam>/<slug>/<file> resolve images on disk.
-func New(s *store.Store, keyPath string, static fs.FS, figuresRoot string, logger *slog.Logger) (*Server, error) {
+// /api/figures/<exam>/<slug>/<file> resolve images on disk. Pass a non-nil
+// adminAuth to enable the teacher/admin review surface at /api/admin/*.
+func New(s *store.Store, keyPath string, static fs.FS, figuresRoot string, adminAuth *admin.Auth, logger *slog.Logger) (*Server, error) {
 	key, err := loadOrCreateKey(keyPath)
 	if err != nil {
 		return nil, err
 	}
-	return &Server{Store: s, Cookies: &cookieSigner{key: key}, Static: static, FiguresRoot: figuresRoot, Logger: logger}, nil
+	return &Server{Store: s, Cookies: &cookieSigner{key: key}, Static: static, FiguresRoot: figuresRoot, Admin: adminAuth, Logger: logger}, nil
 }
 
 // Router returns the configured chi.Mux. Mount under "/" of an http.Server.
@@ -70,6 +73,10 @@ func (s *Server) Router() http.Handler {
 			r.Post("/sessions/{id}/highlights", s.postHighlight)
 			r.Delete("/sessions/{id}/highlights/{hid}", s.deleteHighlight)
 		})
+
+		if s.Admin != nil {
+			admin.Mount(r, s.Store, s.FiguresRoot, s.Admin)
+		}
 	})
 
 	// Serve embedded frontend (or 404 if not present yet).

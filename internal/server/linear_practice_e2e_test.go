@@ -83,7 +83,7 @@ func TestLinearSATPractice1_FullRun(t *testing.T) {
 	}
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	srv, err := server.New(st, keyPath, nil, dir, logger)
+	srv, err := server.New(st, keyPath, nil, dir, nil, logger)
 	if err != nil {
 		t.Fatalf("server.New: %v", err)
 	}
@@ -263,7 +263,7 @@ func TestLinearSATPractice1_RandomWalk(t *testing.T) {
 	}
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	srv, err := server.New(st, keyPath, nil, dir, logger)
+	srv, err := server.New(st, keyPath, nil, dir, nil, logger)
 	if err != nil {
 		t.Fatalf("server.New: %v", err)
 	}

@@ -31,6 +31,59 @@ async function http<T>(
   return (await res.json()) as T;
 }
 
+export type AdminTestListing = {
+  slug: string;
+  title: string;
+  exam_type: string;
+  approved: number;
+  flagged: number;
+  pending: number;
+  total: number;
+};
+
+export type AdminReviewRow = {
+  question_id: string;
+  status: "pending" | "approved" | "flagged";
+  note?: string;
+};
+
+export const adminApi = {
+  login: (passphrase: string) =>
+    http<{ role: string }>("POST", "/api/admin/login", { passphrase }),
+  logout: () => http<void>("POST", "/api/admin/logout"),
+  whoami: () => http<{ role: string }>("GET", "/api/admin/whoami"),
+  listTests: () =>
+    http<{ tests: AdminTestListing[] }>("GET", "/api/admin/tests"),
+  getTest: (slug: string) =>
+    http<{ test: unknown; reviews: Record<string, AdminReviewRow> }>(
+      "GET",
+      `/api/admin/tests/${slug}`,
+    ),
+  patchQuestion: (slug: string, qid: string, body: unknown) =>
+    http<{ slug: string; question_id: string }>(
+      "PATCH",
+      `/api/admin/tests/${slug}/questions/${qid}`,
+      body,
+    ),
+  setReview: (
+    slug: string,
+    qid: string,
+    status: "approved" | "flagged" | "pending",
+    note?: string,
+  ) =>
+    http<unknown>(
+      "PUT",
+      `/api/admin/tests/${slug}/questions/${qid}/review`,
+      { status, note },
+    ),
+  bulkReview: (slug: string, status: "approved" | "flagged" | "pending") =>
+    http<{ updated: number }>(
+      "POST",
+      `/api/admin/tests/${slug}/review/bulk`,
+      { status },
+    ),
+};
+
 export const api = {
   joinAs: (displayName: string) =>
     http<{ id: number; display_name: string }>("POST", "/api/students", {

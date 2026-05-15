@@ -15,9 +15,11 @@ import (
 	"time"
 
 	"github.com/qiangli/omniscore/frontend"
+	"github.com/qiangli/omniscore/internal/admin"
 	"github.com/qiangli/omniscore/internal/content"
 	"github.com/qiangli/omniscore/internal/server"
 	"github.com/qiangli/omniscore/internal/store"
+	syncpkg "github.com/qiangli/omniscore/internal/sync"
 )
 
 func main() {
@@ -25,11 +27,14 @@ func main() {
 	dbPath := flag.String("db", "omniscore.db", "SQLite database path")
 	contentRoot := flag.String("content", "content", "directory containing per-exam-type subdirs (sat/, ap/, ...) each with per-slug subdirs holding test.json/curve.json/figures/, OR a flat tests/+curves/ layout. Accepts ~ for $HOME.")
 	keyPath := flag.String("key", "omniscore.key", "HMAC cookie signing key file (auto-created). Accepts ~ for $HOME.")
+	adminKeyPath := flag.String("admin-key", "omniscore.admin-key", "Admin passphrase file (auto-created on first boot; passphrase printed once in the banner). Accepts ~ for $HOME.")
+	syncMode := flag.String("sync", "noop", "External sync adapter: noop (default; outbox accumulates locally) or a future named adapter.")
 	flag.Parse()
 
 	*dbPath = expandHome(*dbPath)
 	*contentRoot = expandHome(*contentRoot)
 	*keyPath = expandHome(*keyPath)
+	*adminKeyPath = expandHome(*adminKeyPath)
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
@@ -50,10 +55,29 @@ func main() {
 	}
 	logger.Info("content loaded", "root", *contentRoot)
 
-	srv, err := server.New(s, *keyPath, frontend.DistFS(), *contentRoot, logger)
+	auth, passphrase, err := admin.NewAuth(*adminKeyPath)
+	if err != nil {
+		logger.Error("admin auth init", "err", err)
+		os.Exit(1)
+	}
+
+	srv, err := server.New(s, *keyPath, frontend.DistFS(), *contentRoot, auth, logger)
 	if err != nil {
 		logger.Error("init server", "err", err)
 		os.Exit(1)
+	}
+
+	adapter := pickAdapter(*syncMode)
+	if adapter != nil {
+		go syncpkg.Run(ctx, syncpkg.Config{
+			Adapter: adapter,
+			DB:      s.DB,
+			PullEntities: []string{
+				syncpkg.EntityUser,
+				syncpkg.EntityStandardTest,
+				syncpkg.EntityTask,
+			},
+		})
 	}
 
 	httpSrv := &http.Server{
@@ -62,7 +86,7 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	printJoinInfo(logger, *bind)
+	printJoinInfo(logger, *bind, passphrase)
 
 	go func() {
 		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -78,7 +102,17 @@ func main() {
 	_ = httpSrv.Shutdown(shutCtx)
 }
 
-func printJoinInfo(logger *slog.Logger, bind string) {
+func pickAdapter(name string) syncpkg.Adapter {
+	switch name {
+	case "", "noop":
+		return syncpkg.Noop{}
+	default:
+		// Unknown adapter falls back to noop with a log line in Run().
+		return syncpkg.Noop{}
+	}
+}
+
+func printJoinInfo(logger *slog.Logger, bind, adminPassphrase string) {
 	_, port, err := net.SplitHostPort(bind)
 	if err != nil {
 		port = "28080"
@@ -100,6 +134,9 @@ func printJoinInfo(logger *slog.Logger, bind string) {
 			fmt.Fprintf(os.Stdout, "    http://%s:%s\n", ip, port)
 		}
 	}
+	fmt.Fprintln(os.Stdout)
+	fmt.Fprintf(os.Stdout, "  Admin login: %s/admin/login\n", primary)
+	fmt.Fprintf(os.Stdout, "  Admin passphrase (printed once): %s\n", adminPassphrase)
 	fmt.Fprintln(os.Stdout)
 }
 
