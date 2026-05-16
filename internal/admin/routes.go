@@ -29,6 +29,9 @@ func Mount(r chi.Router, s *store.Store, contentRoot string, auth *Auth) {
 		r.Post("/admin/tests/{slug}/review/bulk", reviewer.BulkSetReview)
 		r.Get("/admin/sync/status", syncStatusHandler(s))
 		r.Get("/admin/users", listUsersHandler(s))
+		r.Post("/admin/users", createUserHandler(s))
+		r.Patch("/admin/users/{id}", updateUserHandler(s))
+		r.Delete("/admin/users/{id}", deleteUserHandler(s))
 		r.Get("/admin/tasks", listTasksHandler(s))
 	})
 }
@@ -60,7 +63,7 @@ type userRow struct {
 func listUsersHandler(s *store.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rows, err := s.DB.QueryContext(r.Context(),
-			`SELECT id, role, name, created_at FROM users ORDER BY created_at DESC`)
+			`SELECT id, role, name, created_at FROM users WHERE deleted_at IS NULL ORDER BY created_at DESC`)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
