@@ -11,7 +11,11 @@ Source layout:
 - `cmd/omniscore/main.go` — entrypoint, flags, LAN bind, ASCII landing-page banner. `-content` and `-key` flags accept `~` for `$HOME`.
 - `cmd/ap-import/main.go` — AP-PDF→JSON importer binary. Thin (~150-line) wrapper that selects `profile.AP()` and delegates to `internal/importer/pipeline.Run`. Shells out to `pdftoppm` (Poppler) and a vision LLM. NOT shipped in releases.
 - `cmd/sat-import/main.go` — Digital SAT (Bluebook) PDF→JSON importer. Same wrapper pattern, selects `profile.SAT()`. Accepts 1–3 PDFs (`-pdf-test` required; `-pdf-scoring` and `-pdf-explanation` optional) or scans `-in <dir>` for filename-suffix patterns. Output: `data/omni-data/sat/<slug>/`.
+- `cmd/sat-pdf-eval/main.go` — local eval harness that compares pure-Go / shell-out PDF extractors against the LLM-extracted JSON. Dev-tool only; NOT shipped. Findings live in `docs/local-model-eval.md`.
 - `internal/store/` — SQLite + embedded migrations. Canonical SQL is at `migrations/0001_init.sql` at the repo root and mirrored under `internal/store/migrations/` for `go:embed`; keep them in sync (guarded by `TestMigrationFilesIdentical`).
+- `internal/admin/` — single-passphrase admin auth (`auth.go`) + teacher review/edit workflow mounted at `/api/admin/*` (login, whoami, list tests, get/patch question, per-question + bulk review state, sync status, users, tasks). Server reads the passphrase from `-admin-key` (default `omniscore.admin-key`); the file is auto-created on first boot and the cleartext passphrase is printed **once** in the landing-page banner — capture it then.
+- `internal/sync/` — outbox + pluggable `Adapter` for pushing canonical `users`/`standard_tests`/`tasks` to an external system. Driven by the `-sync` flag on the main binary (`noop` default; only `noop` is wired today, so the outbox just accumulates locally). `loop.go` is the polling driver, `store.go` is the outbox table, `adapter.go` is the interface.
+- `internal/grading/` — manual grading for short-response questions (separate from the curve-driven scaled-score path in `internal/scoring/`).
 - `internal/content/` — test JSON schema (`Test`, `Module`, `Question`, `Choice`, `Figure`) + disk loader. Loader signature is `LoadFromDisk(ctx, s, contentRoot)` and supports two layouts: legacy flat (`<root>/{tests,curves}/<slug>.json`) and per-test self-contained subfolder (`<root>/<exam>/<slug>/{test.json,curve.json,figures/*.png}`). Figure srcs in JSON are relative; the loader rewrites them to absolute `/api/figures/<exam>/<slug>/<file>` URLs at load time.
 - `internal/scoring/` — raw → scaled curve lookup with nearest-neighbour fallback. Section names are user-defined (no SAT-only hardcoding).
 - `internal/session/` — lifecycle (create / resume / advance / submit / score) + highlights. Server-authoritative timer math. `Summary` carries `ExamType` + `Subject` for the frontend section-label lookup.
@@ -32,16 +36,23 @@ Source layout:
 The Makefile is the source of truth. Requires Go ≥ 1.22 and Node ≥ 20.
 
 ```bash
+make help               # print all targets (the canonical list)
 make build              # frontend (vite) + backend (go build with embedded dist) → bin/omniscore
 make test               # go test ./... + go vet + frontend `npm run lint` (tsc --noEmit)
-make dev                # build + run on 0.0.0.0:28080 (the binary's default bind)
+make dev                # build + run in the foreground on 0.0.0.0:28080
+make start              # build + launch in the BACKGROUND; pid+log in .run/, content from $(CONTENT_DIR)
+make stop               # kill the background server tracked in .run/omniscore.pid
+make status             # report whether the background server is running (prints URLs)
 make install            # go install ./cmd/omniscore (frontend built first)
 make release            # cross-compile darwin/{arm64,amd64}, linux/amd64, windows/amd64
-make clean              # nukes bin/, frontend/dist, node_modules, omniscore.db, omniscore.key
+make clean              # nukes bin/, frontend/dist, node_modules, .run/, omniscore.db, omniscore.key, omniscore.admin-key
 make tidy               # go mod tidy + go fmt + go vet
 make ap-import          # build the AP-PDF→JSON importer to bin/ap-import (NOT shipped in releases)
 make sat-import         # build the SAT-PDF→JSON importer to bin/sat-import (NOT shipped in releases)
+make sat-pdf-eval       # build the PDF-extraction eval tool (dev only; NOT shipped)
 ```
+
+`make start` accepts `CONTENT_DIR=` and `BIND=` overrides (defaults: `data/omni-data` and `0.0.0.0:28080`). It refuses to start if `$(CONTENT_DIR)` doesn't exist or another instance is already running — fix the underlying cause rather than deleting `.run/omniscore.pid` blindly.
 
 Targeted commands:
 
@@ -62,7 +73,7 @@ go vet ./...
 ./bin/sat-import -in data/raw/sat/<slug> -slug <slug> -title <title>
 ```
 
-`bin/omniscore` flags (defaults shown): `-bind 0.0.0.0:28080`, `-db omniscore.db`, `-content content` (accepts the flat legacy layout `<root>/{tests,curves}/<slug>.json` AND the per-test self-contained layout `<root>/<exam>/<slug>/{test.json,curve.json,figures/}`), `-key omniscore.key` (HMAC cookie key, auto-created on first run). `~` in `-content`, `-key`, `-db` is expanded to `$HOME`.
+`bin/omniscore` flags (defaults shown): `-bind 0.0.0.0:28080`, `-db omniscore.db`, `-content content` (accepts the flat legacy layout `<root>/{tests,curves}/<slug>.json` AND the per-test self-contained layout `<root>/<exam>/<slug>/{test.json,curve.json,figures/}`), `-key omniscore.key` (HMAC cookie key, auto-created on first run), `-admin-key omniscore.admin-key` (single admin passphrase; auto-created on first boot and **printed once** in the landing banner — capture it then or `rm` the file to regenerate), `-sync noop` (external-sync adapter; only `noop` is wired today). `~` in `-content`, `-key`, `-db`, `-admin-key` is expanded to `$HOME`.
 
 Both importer binaries (`bin/{ap,sat}-import`) require `pdftoppm` (Poppler) plus a vision LLM, selected via `-model vendor/model` (or `OMNI_MODEL` env var). Supported vendors: `ollama`, `anthropic`, `openai`, `gemini`. API keys come from convention env vars: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY` (or `GOOGLE_API_KEY`). Examples:
 
