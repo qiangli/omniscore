@@ -20,6 +20,7 @@ import (
 // question_review rows. Same for choice labels: only TextMD and the
 // per-figure caption (Alt) are editable on choices.
 type EditQuestionRequest struct {
+	PassageMD            *string             `json:"passage_md,omitempty"`
 	StemMD               *string             `json:"stem_md,omitempty"`
 	AnswerLabel          *string             `json:"answer_label,omitempty"`
 	AnswerValues         *[]string           `json:"answer_values,omitempty"`
@@ -87,6 +88,9 @@ func (e *Editor) PatchQuestion(w http.ResponseWriter, r *http.Request) {
 }
 
 func applyEdit(q *content.Question, req EditQuestionRequest) {
+	if req.PassageMD != nil {
+		q.PassageMD = *req.PassageMD
+	}
 	if req.StemMD != nil {
 		q.StemMD = *req.StemMD
 	}

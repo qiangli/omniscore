@@ -18,6 +18,7 @@ export default function App() {
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin/tests" component={AdminTests} />
       <Route path="/admin/review/:slug" component={AdminReview} />
+      <Route path="/admin/review/:slug/:moduleIdx/:qIdx" component={AdminReview} />
       <Route>
         <main className="p-8 text-ink/60">Not found.</main>
       </Route>
