@@ -14,6 +14,7 @@ export default function App() {
       <Route path="/exam/:sessionId/review" component={Review} />
       <Route path="/exam/:sessionId" component={Exam} />
       <Route path="/results/:sessionId" component={Results} />
+      <Route path="/admin" component={AdminLogin} />
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin/tests" component={AdminTests} />
       <Route path="/admin/review/:slug" component={AdminReview} />
