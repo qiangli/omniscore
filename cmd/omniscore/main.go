@@ -26,6 +26,7 @@ func main() {
 	bind := flag.String("bind", "0.0.0.0:28080", "host:port to bind the HTTP server")
 	dbPath := flag.String("db", "omniscore.db", "SQLite database path")
 	contentRoot := flag.String("content", "content", "directory containing per-exam-type subdirs (sat/, ap/, ...) each with per-slug subdirs holding test.json/curve.json/figures/, OR a flat tests/+curves/ layout. Accepts ~ for $HOME.")
+	publishedRoot := flag.String("published", "data/omni-approved", "destination tree for /api/admin/tests/{slug}/publish (the approved-only export). Boot a separate mock-test instance with -content pointing here. Accepts ~ for $HOME.")
 	keyPath := flag.String("key", "omniscore.key", "HMAC cookie signing key file (auto-created). Accepts ~ for $HOME.")
 	adminKeyPath := flag.String("admin-key", "omniscore.admin-key", "Admin passphrase file (auto-created on first boot; passphrase printed once in the banner). Accepts ~ for $HOME.")
 	syncMode := flag.String("sync", "noop", "External sync adapter: noop (default; outbox accumulates locally) or a future named adapter.")
@@ -33,6 +34,7 @@ func main() {
 
 	*dbPath = expandHome(*dbPath)
 	*contentRoot = expandHome(*contentRoot)
+	*publishedRoot = expandHome(*publishedRoot)
 	*keyPath = expandHome(*keyPath)
 	*adminKeyPath = expandHome(*adminKeyPath)
 
@@ -66,6 +68,7 @@ func main() {
 		logger.Error("init server", "err", err)
 		os.Exit(1)
 	}
+	srv.PublishedRoot = *publishedRoot
 
 	adapter := pickAdapter(*syncMode)
 	if adapter != nil {

@@ -8,13 +8,16 @@ import (
 	"github.com/qiangli/omniscore/internal/store"
 )
 
-// Mount installs the /api/admin/* routes on r. contentRoot is the same path
-// the server was booted with (-content) so the editor can find test.json
-// files and the loader can hot-reload after each write.
-func Mount(r chi.Router, s *store.Store, contentRoot string, auth *Auth) {
+// Mount installs the /api/admin/* routes on r. contentRoot is the same
+// path the server was booted with (-content); editor + publisher need it
+// to find test.json files and copy figures. publishedRoot is the
+// destination tree for /admin/tests/{slug}/publish; "" disables that one
+// endpoint but leaves the rest of the admin surface working.
+func Mount(r chi.Router, s *store.Store, contentRoot, publishedRoot string, auth *Auth) {
 	io := NewJSONIO(contentRoot, s)
 	editor := &Editor{IO: io, Store: s}
 	reviewer := &Reviewer{Store: s}
+	publisher := &Publisher{IO: io, Store: s, PublishedRoot: publishedRoot}
 
 	r.Post("/admin/login", auth.Login)
 	r.Post("/admin/logout", auth.Logout)
@@ -27,6 +30,7 @@ func Mount(r chi.Router, s *store.Store, contentRoot string, auth *Auth) {
 		r.Patch("/admin/tests/{slug}/questions/{qid}", editor.PatchQuestion)
 		r.Put("/admin/tests/{slug}/questions/{qid}/review", reviewer.SetReview)
 		r.Post("/admin/tests/{slug}/review/bulk", reviewer.BulkSetReview)
+		r.Post("/admin/tests/{slug}/publish", publisher.Publish)
 		r.Get("/admin/sync/status", syncStatusHandler(s))
 		r.Get("/admin/users", listUsersHandler(s))
 		r.Post("/admin/users", createUserHandler(s))

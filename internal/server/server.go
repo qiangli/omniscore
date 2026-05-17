@@ -23,12 +23,13 @@ import (
 
 // Server holds wiring for the HTTP handlers.
 type Server struct {
-	Store       *store.Store
-	Cookies     *cookieSigner
-	Static      fs.FS       // embedded frontend; may be nil during early bootstrap
-	FiguresRoot string      // contentRoot — base for per-exam <exam>/figures/ trees
-	Admin       *admin.Auth // optional; when non-nil mounts /api/admin/*
-	Logger      *slog.Logger
+	Store         *store.Store
+	Cookies       *cookieSigner
+	Static        fs.FS       // embedded frontend; may be nil during early bootstrap
+	FiguresRoot   string      // contentRoot — base for per-exam <exam>/figures/ trees
+	PublishedRoot string      // destination for /api/admin/tests/{slug}/publish; "" disables it
+	Admin         *admin.Auth // optional; when non-nil mounts /api/admin/*
+	Logger        *slog.Logger
 }
 
 // New builds a Server with a HMAC cookie key persisted at keyPath. figuresRoot
@@ -75,7 +76,7 @@ func (s *Server) Router() http.Handler {
 		})
 
 		if s.Admin != nil {
-			admin.Mount(r, s.Store, s.FiguresRoot, s.Admin)
+			admin.Mount(r, s.Store, s.FiguresRoot, s.PublishedRoot, s.Admin)
 		}
 	})
 
